@@ -1641,28 +1641,16 @@ def __train_tree (
 
         begin_find_best = datetime.datetime.now()
 
-        plpy.execute(
-            """
-            SELECT {madlib_schema}.__find_best_split
-            ( 
-                'training_instance',
-                {confidence_level},
-                '{training_table_meta}',
-                {sc_code},
-                {grow_tree},
-                'find_best_answer_table',
-                {h2hmv_routine_id},
-                {num_classes}
-            )
-            """.format(
-                confidence_level = confidence_level,
-                training_table_meta = training_table_meta,
-                sc_code = sc_code,
-                grow_tree = grow_tree,
-                h2hmv_routine_id = h2hmv_routine_id,
-                num_classes = num_classes,
-                madlib_schema = madlib_schema
-            )
+        __find_best_split( 
+            madlib_schema,
+            'training_instance',
+            confidence_level,
+            training_table_meta,
+            sc_code,
+            grow_tree,
+            'find_best_answer_table',
+            h2hmv_routine_id,
+            num_classes
         )
 
         if verbosity > 0 :

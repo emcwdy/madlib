@@ -355,112 +355,30 @@ CREATE TYPE MADLIB_SCHEMA.c45_classify_result AS
 CREATE OR REPLACE FUNCTION MADLIB_SCHEMA.c45_train
     (
     split_criterion             TEXT,
-    training_table_name         TEXT, 
+    training_table_name         TEXT,
     result_tree_table_name      TEXT,
-    validation_table_name       TEXT, 
-    continuous_feature_names    TEXT, 
-    feature_col_names           TEXT, 
-    id_col_name                 TEXT, 
-    class_col_name              TEXT, 
+    validation_table_name       TEXT,
+    continuous_feature_names    TEXT,
+    feature_col_names           TEXT,
+    id_col_name                 TEXT,
+    class_col_name              TEXT,
     confidence_level            FLOAT,
     how2handle_missing_value    TEXT,
-    max_tree_depth              INT, 
+    max_tree_depth              INT,
     node_prune_threshold        FLOAT,
-    node_split_threshold        FLOAT, 
+    node_split_threshold        FLOAT,
     verbosity                   INT
-    ) 
+    )
 RETURNS MADLIB_SCHEMA.c45_train_result AS $$
-DECLARE
-    begin_func_exec                 TIMESTAMP;
-    tree_table_name                 TEXT;
-    ret                             MADLIB_SCHEMA.c45_train_result;
-    train_rs                        RECORD;
-BEGIN   
-    begin_func_exec = clock_timestamp();
-    
-    IF (verbosity < 1) THEN
-        -- get rid of the messages whose severity level is lower than 'WARNING'
-        SET client_min_messages = WARNING;
-    END IF;
+    PythonFunctionBodyOnly(`cart', `c45')
 
-    PERFORM MADLIB_SCHEMA.__assert
-        (
-            (confidence_level IS NOT NULL)      AND
-            float8ge(confidence_level, 0.001)   AND
-            float8le(confidence_level, 100),
-            'confidence level value must be in range from 0.001 to 100'
-        );
+    return c45.c45_train(MADlibSchema, split_criterion, training_table_name, result_tree_table_name,
+               validation_table_name, continuous_feature_names, feature_col_names, id_col_name,
+               class_col_name, confidence_level, how2handle_missing_value, max_tree_depth, 
+               node_prune_threshold, node_split_threshold, verbosity
+    )
+$$ LANGUAGE PLPYTHONU;
 
-    PERFORM MADLIB_SCHEMA.__assert
-        (
-            validation_table_name IS NULL OR
-            MADLIB_SCHEMA.__table_exists
-                (
-                    validation_table_name
-                ),
-            'the specified validation table' ||
-            '<'                              ||
-            validation_table_name            ||
-            '> does not exist'
-        );
-
-    tree_table_name = btrim(lower(result_tree_table_name), ' ');
-    PERFORM MADLIB_SCHEMA.__check_dt_common_params
-        (
-            split_criterion,
-            training_table_name, 
-            tree_table_name,
-            continuous_feature_names, 
-            feature_col_names, 
-            id_col_name, 
-            class_col_name, 
-            how2handle_missing_value,
-            max_tree_depth,
-            node_prune_threshold,
-            node_split_threshold, 
-            verbosity,
-            'tree'
-        );
-    RAISE INFO '%', tree_table_name;
-    train_rs = MADLIB_SCHEMA.__encode_and_train
-        (
-            'C4.5',
-            split_criterion,
-            1,
-            NULL,
-            training_table_name,
-            validation_table_name,
-            tree_table_name,
-            continuous_feature_names, 
-            feature_col_names, 
-            id_col_name, 
-            class_col_name, 
-            confidence_level,
-            how2handle_missing_value,
-            max_tree_depth,
-            1.0,
-            'f',
-            node_prune_threshold,
-            node_split_threshold, 
-            '<tree_schema_name>_<tree_table_name>',
-            verbosity
-        );
-
-    IF ( verbosity > 0 ) THEN
-            RAISE INFO 'Training Total Time: %', 
-                clock_timestamp() - begin_func_exec;
-            RAISE INFO 'training result:%', train_rs;
-    END IF;
-  
-    ret.training_set_size   = train_rs.num_of_samples;     
-    ret.tree_nodes          = train_rs.num_tree_nodes; 
-    ret.tree_depth          = train_rs.max_tree_depth;
-    ret.training_time       = clock_timestamp() - begin_func_exec;
-    ret.split_criterion     = split_criterion;
-    
-    RETURN ret;
-END
-$$ LANGUAGE PLPGSQL;
 
 
 /**
@@ -513,30 +431,13 @@ CREATE OR REPLACE FUNCTION MADLIB_SCHEMA.c45_train
     how2handle_missing_value    TEXT
     ) 
 RETURNS MADLIB_SCHEMA.c45_train_result AS $$
-DECLARE
-    ret       MADLIB_SCHEMA.c45_train_result;
-BEGIN
-    ret = MADLIB_SCHEMA.c45_train
-            (
-                split_criterion,
-                training_table_name, 
-                result_tree_table_name,
-                validation_table_name , 
-                continuous_feature_names , 
-                feature_col_names , 
-                id_col_name , 
-                class_col_name , 
-                confidence_level,
-                how2handle_missing_value,
-                10,
-                0.001,
-                0.01,
-                0           
-            );
-    
-    RETURN ret;
-END
-$$ LANGUAGE PLPGSQL;
+    PythonFunctionBodyOnly(`cart', `c45')
+
+    return c45.c45_train(MADlibSchema, split_criterion, training_table_name, result_tree_table_name,
+               validation_table_name, continuous_feature_names, feature_col_names, id_col_name,
+               class_col_name, confidence_level, how2handle_missing_value, 10, 0.001, 0.01, 0
+    )
+$$ LANGUAGE PLPYTHONU;
 
 
 /**
@@ -572,26 +473,12 @@ CREATE OR REPLACE FUNCTION MADLIB_SCHEMA.c45_train
     result_tree_table_name  TEXT
     ) 
 RETURNS MADLIB_SCHEMA.c45_train_result AS $$
-DECLARE
-    ret MADLIB_SCHEMA.c45_train_result;
-BEGIN   
-    ret =  MADLIB_SCHEMA.c45_train
-            (
-                split_criterion,
-                training_table_name, 
-                result_tree_table_name,
-                null,
-                null,       
-                null,
-                'id',
-                'class',
-                25,
-                'explicit'
-            );
-   
-    RETURN ret;
-END
-$$ LANGUAGE PLPGSQL;
+    PythonFunctionBodyOnly(`cart', `c45')
+
+    return c45.c45_train(MADlibSchema, split_criterion, training_table_name, result_tree_table_name,
+               null, null, null, 'id', 'class', 25, 'explicit', 10, 0.001, 0.01, 0
+    )
+$$ LANGUAGE PLPYTHONU;
 
 
 /**
@@ -604,279 +491,15 @@ $$ LANGUAGE PLPGSQL;
  *
  */
 CREATE OR REPLACE FUNCTION MADLIB_SCHEMA.c45_genrule
-    (
+(
     tree_table_name TEXT,
     verbosity       INT
-    ) 
+)
 RETURNS SETOF TEXT AS $$
-DECLARE
-    metatable_name          TEXT;
-    classtable_name         TEXT;
-    class_column_name       TEXT;
-    rec                     RECORD;
-    fvalue_stmt             TEXT;
-    feature_rule            TEXT;
-    curstmt                 TEXT;
-    union_stmt              TEXT := NULL;
-    exec_begin              TIMESTAMP;
-    exec_leaves_rule        INTERVAL;
-    exec_internode_rule     INTERVAL;
-    exec_union              INTERVAL;    
-BEGIN
+    PythonFunctionBodyOnly(`cart', `c45')
 
-    IF (verbosity < 1) THEN
-        -- get rid of the messages whose severity level is lower than 'WARNING'
-        SET client_min_messages = WARNING;
-    END IF;
-    
-    PERFORM MADLIB_SCHEMA.__assert
-            (
-                (tree_table_name IS NOT NULL) AND
-                (
-                 MADLIB_SCHEMA.__table_exists
-                    (
-                        tree_table_name
-                    )
-                ),
-                'the specified tree table'      || 
-                coalesce('<'                    || 
-                tree_table_name                 || 
-                '> does not exists', ' is NULL')
-            );   
-            
-    PERFORM MADLIB_SCHEMA.__assert
-            (
-                verbosity IS NOT NULL,                
-                'verbosity must be non-null'
-            );              
-    
-    IF (verbosity > 0 ) THEN     
-        exec_begin          = clock_timestamp();
-        exec_leaves_rule    = exec_begin - exec_begin;
-        exec_union          = exec_leaves_rule;
-        exec_internode_rule = exec_leaves_rule;
-    END IF;
-    
-    -- get metatable and classtable name given the tree table name
-    metatable_name    = MADLIB_SCHEMA.__get_metatable_name(tree_table_name);
-    classtable_name   = MADLIB_SCHEMA.__get_classtable_name(metatable_name);
-    class_column_name = MADLIB_SCHEMA.__get_class_column_name(metatable_name);
-    
-    curstmt = MADLIB_SCHEMA.__format
-                (
-                    'SELECT id, maxclass, probability, 
-                            sample_size, lmc_nid, lmc_fval 
-                     FROM % 
-                     WHERE id = 1',
-                    ARRAY[
-                        tree_table_name
-                    ]
-                );
-                    
-    EXECUTE  curstmt INTO rec;
-    
-    -- in sample the root node is leaf
-    IF (rec.lmc_nid IS NULL) THEN
-        RETURN NEXT 'All instances will be classified to class '    || 
-                     MADLIB_SCHEMA.__get_class_value
-                        (rec.maxclass, metatable_name)              ||
-                     ' ['                                           || 
-                     (rec.probability * rec.sample_size)::BIGINT       || 
-                     '/'                                            || 
-                     rec.sample_size                                   || 
-                     ']'; 
-        RETURN;       
-    END IF;
-    
-    -- get the meta info for features in the tree table (as best split)
-    curstmt = MADLIB_SCHEMA.__format
-                (
-                    'SELECT 
-                        id, 
-                        column_name, 
-                        MADLIB_SCHEMA.__regclass_to_text
-                            (table_oid) as table_name, 
-                        is_cont
-                     FROM 
-                        % n1
-                     WHERE id IN
-                        (SELECT DISTINCT feature
-                         FROM %
-                         WHERE lmc_nid IS NOT NULL
-                        )',
-                    ARRAY[
-                        metatable_name,
-                        tree_table_name
-                    ]
-                );
-    
-    -- put all the features' value together using 'union all' 
-    FOR rec IN EXECUTE curstmt LOOP
-        -- continuous feature will produce two rows
-        IF (rec.is_cont) THEN
-            SELECT MADLIB_SCHEMA.__format
-                (
-                'SELECT % as fid, 1 as key, 
-                       ''% <= ''::TEXT as fname, null::text as fval
-                 UNION ALL 
-                 SELECT % as fid, 2 as key, ''% > ''::TEXT as fname, 
-                        null::text as fval',
-                ARRAY[
-                    rec.id::TEXT,
-                    rec.column_name,
-                    rec.id::TEXT,
-                    rec.column_name
-                    ]
-                ) INTO fvalue_stmt;
-            
-        -- discrete feature will produce the number of rows 
-        -- which is the same with distinct values
-        ELSE
-            SELECT MADLIB_SCHEMA.__format
-                (
-                'SELECT % as fid, key, ''% = ''::TEXT as fname, 
-                        MADLIB_SCHEMA.__to_char(%) as fval
-                 FROM %
-                 WHERE key IS NOT NULL',
-                ARRAY[
-                    rec.id::TEXT,
-                    rec.column_name,
-                    rec.column_name,
-                    rec.table_name
-                    ]
-                )
-            INTO fvalue_stmt;
-        END IF;
-        
-        IF (union_stmt IS NULL) THEN
-            union_stmt = fvalue_stmt;
-        ELSE
-            union_stmt = union_stmt || ' UNION ALL ' || fvalue_stmt;
-        END IF;
-    END LOOP; 
-    
-    IF (verbosity > 0 ) THEN     
-        exec_union = clock_timestamp() - exec_begin;
-        RAISE INFO 'compose feature values statement time:%', exec_union;
-        RAISE INFO 'feature info stmt: %', curstmt;
-        RAISE INFO 'feature value stmt: %', union_stmt;
-    END IF;
-    
-    -- put the rules for leaves into a temp table
-    DROP TABLE IF EXISTS c45_gen_rules_leaves;
-    SELECT MADLIB_SCHEMA.__format
-        (
-        'CREATE TEMP TABLE c45_gen_rules_leaves as
-         SELECT 
-            id, 
-                ''  then class ''                   || 
-                class::TEXT                         || 
-                '' [''                              || 
-                (probability * sample_size)::BIGINT    || 
-                ''/''                               || 
-                sample_size                            || 
-                '']'' 
-            as str,
-            array_to_string(tree_location, '''') as location,
-            1 as rlid
-         FROM 
-            (SELECT id, maxclass, tree_location, probability, sample_size
-             FROM %
-             WHERE lmc_nid IS NULL
-            ) n1
-            LEFT JOIN
-            (SELECT % as class, key
-             FROM % 
-             WHERE key IS NOT NULL
-            ) n2
-            ON n1.maxclass = n2.key 
-         m4_ifdef(`__GREENPLUM__', `DISTRIBUTED BY (location)')',
-        ARRAY[
-            tree_table_name,
-            class_column_name,
-            classtable_name
-            ]
-        )
-    INTO curstmt;
-    
-    EXECUTE curstmt;
-    
-    IF (verbosity > 0 ) THEN     
-        exec_leaves_rule = clock_timestamp() - exec_begin;
-        RAISE INFO 'create table for leaves'' rules time:%', 
-            exec_leaves_rule - exec_union;
-        RAISE INFO 'create tablefor leaves stmt: %', curstmt;
-    END IF;
-    
-    DROP TABLE IF EXISTS c45_gen_rules_internode;
-    -- put rules of the internal nodes into a table
-    SELECT MADLIB_SCHEMA.__format
-        (
-            'CREATE TEMP TABLE c45_gen_rules_internode AS
-            SELECT 
-                lmc_nid + (key - lmc_fval) AS id,
-                CASE WHEN (id = 1) THEN
-                        ''  if ''   || 
-                        fname       || 
-                        COALESCE(split_value::TEXT, 
-                                 MADLIB_SCHEMA.__to_char(fval), ''NULL'') 
-                     ELSE
-                        ''     ''   || 
-                        fname       || 
-                        COALESCE(split_value::TEXT, 
-                                 MADLIB_SCHEMA.__to_char(fval), ''NULL'') 
-                END AS str,
-                array_to_string(tree_location, '''') || key AS location,
-                0  AS rlid                                  
-            FROM
-                (SELECT id, feature, tree_location, 
-                        lmc_nid, lmc_fval, split_value 
-                 FROM %
-                 WHERE lmc_nid IS NOT NULL
-                ) n1
-                LEFT JOIN
-                (%) n2
-                ON n1.feature = n2.fid
-            WHERE
-                (lmc_nid + key - lmc_fval) IN (SELECT id from %)
-            m4_ifdef(`GREENPLUM', `DISTRIBUTED BY (location)')',
-            ARRAY[
-                tree_table_name,
-                union_stmt,
-                tree_table_name
-                ]
-        ) INTO curstmt;    
-    EXECUTE curstmt;
-   
-    IF (verbosity > 0 ) THEN     
-        exec_internode_rule = clock_timestamp() - exec_begin;
-        RAISE INFO 'create table for internal nodes'' rules time:%', 
-            exec_internode_rule - exec_leaves_rule;
-        RAISE INFO 'create tablefor internal nodes stmt: %', curstmt;
-    END IF;
-   
-    FOR rec IN EXECUTE '  
-                  SELECT t1.id, t1.rlid, t2.location, t1.str 
-                  FROM
-                    c45_gen_rules_internode t1
-                    LEFT JOIN
-                    c45_gen_rules_leaves t2 
-                    ON position(t1.location in t2.location) = 1 
-                  UNION ALL 
-                  SELECT id, rlid, location, str 
-                  FROM  c45_gen_rules_leaves n 
-                  ORDER BY location, rlid, id'
-                  LOOP
-        RETURN NEXT rec.str;
-    END LOOP;
-   
-    IF (verbosity > 0 ) THEN     
-        RAISE INFO 'Total rules generation time:%', 
-            clock_timestamp() - exec_begin;
-    END IF;
-    
-    RETURN;
-END $$ LANGUAGE PLPGSQL;
+    return c45.c45_genrule(MADlibSchema, tree_table_name, verbosity)  
+$$ LANGUAGE PLPYTHONU;
 
 
 /**
@@ -888,25 +511,14 @@ END $$ LANGUAGE PLPGSQL;
  *
  */
 CREATE OR REPLACE FUNCTION MADLIB_SCHEMA.c45_genrule
-    (
+(
     tree_table_name TEXT
-    ) 
+)
 RETURNS SETOF TEXT AS $$
-DECLARE 
-    str             TEXT;
-BEGIN
-    -- run in non-verbose mode
-    FOR str IN EXECUTE
-                'SELECT *
-                 FROM MADLIB_SCHEMA.c45_genrule
-                 (' || coalesce('''' || tree_table_name || '''', 'NULL') || ', 0)'
-    LOOP
-        RETURN NEXT str;
-    END LOOP;
-   
-    RETURN;
-END
-$$ LANGUAGE PLPGSQL;
+    PythonFunctionBodyOnly(`cart', `c45')
+
+    return c45.c45_genrule(MADlibSchema, tree_table_name)
+$$ LANGUAGE PLPYTHONU;
 
 
 /**
@@ -923,44 +535,12 @@ CREATE OR REPLACE FUNCTION MADLIB_SCHEMA.c45_display
     (
     tree_table  TEXT,
     max_depth   INT
-    ) 
+    )
 RETURNS SETOF TEXT AS $$
-DECLARE
-    tids    INT[] := ARRAY[1];
-    str     TEXT;
-BEGIN
-    -- get rid of the messages whose severity level is lower than 'WARNING'
-    SET client_min_messages = WARNING;
-    
-    PERFORM MADLIB_SCHEMA.__assert
-            (
-                (tree_table IS NOT NULL) AND
-                (
-                 MADLIB_SCHEMA.__table_exists
-                    (
-                        tree_table
-                    )
-                ),
-                'the specified tree table'      || 
-                coalesce('<'                    || 
-                tree_table                      || 
-                '> does not exists', ' is NULL')
-            );   
+    PythonFunctionBodyOnly(`cart', `c45')
 
-    FOR str IN SELECT * FROM 
-m4_changequote(`>>>', `<<<')
-m4_ifdef(>>>__HAS_ORDERED_AGGREGATES__<<<, >>>
-         MADLIB_SCHEMA.__treemodel_display_with_ordered_aggr
-                                (tree_table,tids,max_depth) LOOP
-<<<, >>>
-         MADLIB_SCHEMA.__treemodel_display_no_ordered_aggr
-                                (tree_table,tids,max_depth) LOOP
-<<<)
-m4_changequote(>>>`<<<, >>>'<<<)
-        RETURN NEXT str;
-    END LOOP;
-    RETURN;
-END $$ LANGUAGE PLPGSQL;
+    return c45.c45_display(MADlibSchema, tree_table, max_depth)
+$$ LANGUAGE PLPYTHONU;
 
 
 /**
@@ -974,16 +554,12 @@ END $$ LANGUAGE PLPGSQL;
 CREATE OR REPLACE FUNCTION MADLIB_SCHEMA.c45_display
     (
     tree_table  TEXT
-    ) 
+    )
 RETURNS SETOF TEXT AS $$
-DECLARE
-    str     TEXT;
-BEGIN
-    FOR str IN SELECT * FROM MADLIB_SCHEMA.c45_display(tree_table,NULL) LOOP
-        RETURN NEXT str;
-    END LOOP;
-    RETURN;
-END $$ LANGUAGE PLPGSQL;
+    PythonFunctionBodyOnly(`cart', `c45')
+
+    return c45.c45_display(MADlibSchema, tree_table)
+$$ LANGUAGE PLPYTHONU;
 
 
 /**
@@ -1008,94 +584,17 @@ END $$ LANGUAGE PLPGSQL;
  */
 CREATE OR REPLACE FUNCTION MADLIB_SCHEMA.c45_classify
     (
-    tree_table_name             TEXT, 
-    classification_table_name   TEXT, 
-    result_table_name           TEXT, 
+    tree_table_name             TEXT,
+    classification_table_name   TEXT,
+    result_table_name           TEXT,
     verbosity                   INT
-    ) 
+    )
 RETURNS MADLIB_SCHEMA.c45_classify_result AS $$
-DECLARE
-    encoded_table_name  TEXT := '';
-    begin_time          TIMESTAMP;
-    ret                 MADLIB_SCHEMA.c45_classify_result;
-    temp_result_table   TEXT := '';
-    metatable_name      TEXT;
-    result_rec          RECORD;
-    curstmt             TEXT;   
-    table_names         TEXT[]; 
-BEGIN
-    IF (verbosity < 1) THEN
-        -- get rid of the messages whose severity level is lower than 'WARNING'
-        SET client_min_messages = WARNING;
-    END IF;
-    
-    begin_time = clock_timestamp();
+    PythonFunctionBodyOnly(`cart', `c45')
 
-    PERFORM MADLIB_SCHEMA.__assert
-            (
-                (result_table_name IS NOT NULL) AND
-                (
-                 NOT MADLIB_SCHEMA.__table_exists
-                    (
-                        result_table_name
-                    )
-                ),
-                'the specified result table' || coalesce('<' || result_table_name || '> exists', ' is NULL')
-            ); 
-    
-    table_names = MADLIB_SCHEMA.__treemodel_classify_internal
-                  (
-                    classification_table_name, 
-                    tree_table_name, 
-                    verbosity 
-                  );
-    
-    encoded_table_name = table_names[1]; 
-    temp_result_table  = table_names[2];
-    
-    EXECUTE 'DELETE FROM '||temp_result_table||' WHERE tid <> 1;';
-    metatable_name = MADLIB_SCHEMA.__get_metatable_name( tree_table_name );
+    return c45.c45_classify(MADlibSchema, tree_table_name, classification_table_name, result_table_name, verbosity)   
+$$ LANGUAGE PLPYTHONU;
 
-    curstmt = MADLIB_SCHEMA.__format
-                (
-                    'SELECT 
-                        column_name,
-                        MADLIB_SCHEMA.__regclass_to_text
-                            (table_oid) as table_name 
-                     FROM %
-                     WHERE column_type=''c'' LIMIT 1',
-                    ARRAY[
-                        metatable_name
-                    ]
-                );
-    
-    EXECUTE curstmt INTO result_rec;
-            
-   -- translate the encoded class information back
-    curstmt = MADLIB_SCHEMA.__format
-                (
-                    'CREATE TABLE % AS SELECT n.id, m.fval as class, n.prob 
-                     From % n, % m 
-                     WHERE n.class = m.code 
-                     m4_ifdef(`__GREENPLUM__', `DISTRIBUTED BY (id)');',
-                    ARRAY[
-                        result_table_name,
-                        temp_result_table,
-                        result_rec.table_name
-                    ]
-                );
-    EXECUTE curstmt;   
-        
-    EXECUTE 'DROP TABLE IF EXISTS ' || encoded_table_name || ';';
-    EXECUTE 'DROP TABLE IF EXISTS ' || temp_result_table || ';';
-    EXECUTE 'SELECT COUNT(*) FROM ' ||classification_table_name||';' 
-            INTO ret.input_set_size;
-    
-    ret.classification_time = clock_timestamp() - begin_time;
-    
-    RETURN ret;
-END
-$$ LANGUAGE PLPGSQL;
 
 
 /**
@@ -1124,22 +623,10 @@ CREATE OR REPLACE FUNCTION MADLIB_SCHEMA.c45_classify
     result_table_name           TEXT
     ) 
 RETURNS MADLIB_SCHEMA.c45_classify_result AS $$
-DECLARE
-    ret MADLIB_SCHEMA.c45_classify_result;
-BEGIN
-    -- get rid of the messages whose severity level is lower than 'WARNING'
-    SET client_min_messages = WARNING;
-    
-	ret = MADLIB_SCHEMA.c45_classify
-	       (
-    	       tree_table_name,
-    	       classification_table_name, 
-    	       result_table_name,
-    	       0
-	       );
-	       
-    RETURN ret;
-END $$ LANGUAGE PLPGSQL;
+    PythonFunctionBodyOnly(`cart', `c45')
+
+    return c45.c45_classify(MADlibSchema, tree_table_name, classification_table_name, result_table_name, 0)
+$$ LANGUAGE PLPYTHONU;
 
 
 /**
@@ -1159,18 +646,10 @@ CREATE OR REPLACE FUNCTION MADLIB_SCHEMA.c45_score
     verbosity                   INT
     ) 
 RETURNS FLOAT8 AS $$
-DECLARE
-    accuracy        FLOAT8;
-BEGIN
-    accuracy = MADLIB_SCHEMA.__treemodel_score
-                (
-                    tree_table_name,
-                    scoring_table_name,
-                    verbosity 
-                );
-    RETURN accuracy;
-END;
-$$ LANGUAGE PLPGSQL;
+    PythonFunctionBodyOnly(`cart', `c45')
+
+    return c45.c45_score(MADlibSchema, tree_table_name, scoring_table_name, verbosity)
+$$ LANGUAGE PLPYTHONU;
 
 
 /**
@@ -1188,18 +667,10 @@ CREATE OR REPLACE FUNCTION MADLIB_SCHEMA.c45_score
     scoring_table_name          TEXT
     ) 
 RETURNS FLOAT8 AS $$
-DECLARE
-    accuracy        FLOAT8;
-BEGIN
-    accuracy = MADLIB_SCHEMA.__treemodel_score
-                (
-                    tree_table_name,
-                    scoring_table_name,
-                    0
-                );
-    RETURN accuracy;
-END;
-$$ LANGUAGE PLPGSQL;
+    PythonFunctionBodyOnly(`cart', `c45')
+
+    return c45.c45_score(MADlibSchema, tree_table_name, scoring_table_name)
+$$ LANGUAGE PLPYTHONU;
 
 
 /**
@@ -1216,10 +687,7 @@ CREATE OR REPLACE FUNCTION MADLIB_SCHEMA.c45_clean
     result_tree_table_name TEXT
     ) 
 RETURNS BOOLEAN AS $$
-DECLARE
-    result BOOLEAN;
-BEGIN
-    result=MADLIB_SCHEMA.__treemodel_clean(result_tree_table_name);
-    RETURN result;
-END
-$$ LANGUAGE PLPGSQL;
+    PythonFunctionBodyOnly(`cart', `c45')
+
+    return c45.c45_clean(MADlibSchema, result_tree_table_name)
+$$ LANGUAGE PLPYTHONU;

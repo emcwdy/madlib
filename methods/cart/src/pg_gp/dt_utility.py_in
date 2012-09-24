@@ -10,7 +10,7 @@
 import plpy
 
 
-def __get_returns(t, key, i = 0):
+def __get_query_value(t, key, i = 0):
     """
     @brief If the ith record which is a dict exists and the dict has the param 
            key, return the value of the key, or return None.
@@ -28,7 +28,7 @@ def __get_returns(t, key, i = 0):
         return None
 
 
-def __get_record(t, i = 0):
+def __get_query_record(t, i = 0):
     """
     @brief Get the ith record from t.
 
@@ -125,7 +125,7 @@ def __column_exists(madlib_schema, full_table_name, column_name):
                       full_table_name = full_table_name
                   )
         t = plpy.execute(curstmt) 
-        result = __get_returns(t, "count")
+        result = __get_query_value(t, "count")
 
         return result >= 1
     return False
@@ -151,7 +151,7 @@ def __table_exists(madlib_schema, validation_table_name):
             )
         )
 
-    return __get_returns(t, "existence")    
+    return __get_query_value(t, "existence")    
     
 
 def __strip_schema_name(full_table_name):

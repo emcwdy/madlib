@@ -526,107 +526,32 @@ CREATE TYPE MADLIB_SCHEMA.rf_classify_result AS
 CREATE OR REPLACE FUNCTION MADLIB_SCHEMA.rf_train
     (
     split_criterion             TEXT,
-    training_table_name         TEXT, 
+    training_table_name         TEXT,
     result_rf_table_name        TEXT,
-    num_trees                   INT, 
+    num_trees                   INT,
     features_per_node           INT,
     sampling_percentage         FLOAT,
-    continuous_feature_names    TEXT, 
-    feature_col_names           TEXT, 
-    id_col_name                 TEXT, 
-    class_col_name              TEXT, 
+    continuous_feature_names    TEXT,
+    feature_col_names           TEXT,
+    id_col_name                 TEXT,
+    class_col_name              TEXT,
     how2handle_missing_value    TEXT,
     max_tree_depth              INT,
     node_prune_threshold        FLOAT,
-    node_split_threshold        FLOAT, 
+    node_split_threshold        FLOAT,
     verbosity                   INT
-    ) 
+    )
 RETURNS MADLIB_SCHEMA.rf_train_result AS $$
-DECLARE
-    begin_func_exec                 TIMESTAMP;
-    rf_table_name                   TEXT;
-    h2hmv_routine_id                INT := 1;
-    ret                             MADLIB_SCHEMA.rf_train_result;
-    train_rs                        RECORD;
-    n_fids                          INT;
-    features_per_node_tmp           INT;
-    curstmt                         TEXT;
-    enc_info                        TEXT[];
-BEGIN   
-    begin_func_exec = clock_timestamp();
-    
-    IF (verbosity < 1) THEN
-        -- get rid of the messages whose severity level is lower than 'WARNING'
-        SET client_min_messages = WARNING;
-    END IF;
+    PythonFunctionBodyOnly(`cart', `rf')
 
-    PERFORM MADLIB_SCHEMA.__assert
-        (
-            num_trees IS NOT NULL                                   AND
-            sampling_percentage IS NOT NULL                         AND
-            num_trees  > 0                                          AND
-            (features_per_node IS NULL OR  features_per_node > 0)   AND
-            sampling_percentage > 0,
-            'invalid parameter value for num_trees, features_per_node or sampling_percentage'
-        );
+    return rf.rf_train(MADlibSchema, split_criterion, training_table_name, result_rf_table_name, num_trees,
+        features_per_node, sampling_percentage, continuous_feature_names, feature_col_names, id_col_name,
+        class_col_name, how2handle_missing_value, max_tree_depth, node_prune_threshold, node_split_threshold, 
+        verbosity
+    )   
+$$ LANGUAGE PLPYTHONU;
 
-    rf_table_name = btrim(lower(result_rf_table_name), ' ');
-    PERFORM MADLIB_SCHEMA.__check_dt_common_params
-        (
-            split_criterion,
-            training_table_name, 
-            rf_table_name,
-            continuous_feature_names, 
-            feature_col_names, 
-            id_col_name, 
-            class_col_name, 
-            how2handle_missing_value,
-            max_tree_depth,
-            node_prune_threshold,
-            node_split_threshold, 
-            verbosity,
-            'random forest'
-        );
 
-    train_rs = MADLIB_SCHEMA.__encode_and_train
-        (
-            'RF',
-            split_criterion,
-            num_trees,
-            features_per_node,
-            training_table_name,
-            NULL,
-            rf_table_name,
-            continuous_feature_names, 
-            feature_col_names, 
-            id_col_name, 
-            class_col_name, 
-            100.0,
-            how2handle_missing_value,
-            max_tree_depth,
-            sampling_percentage,
-            't',
-            node_prune_threshold,
-            node_split_threshold, 
-            '<RF table schema name>_<RF table name>',
-            verbosity
-        );
-
-    IF ( verbosity > 0 ) THEN
-            RAISE INFO 'Training Total Time: %', clock_timestamp() - begin_func_exec;
-            RAISE INFO 'training result:%', train_rs;
-    END IF;
-
-    ret.training_time           = clock_timestamp() - begin_func_exec;
-    ret.num_of_samples          = train_rs.num_of_samples;      
-    ret.num_trees               = num_trees; 
-    ret.features_per_node       = train_rs.features_per_node; 
-    ret.num_tree_nodes          = train_rs.num_tree_nodes; 
-    ret.max_tree_depth          = train_rs.max_tree_depth;
-    ret.split_criterion         = split_criterion;
-    RETURN ret;
-END
-$$ LANGUAGE PLPGSQL;
 
 
 /**
@@ -655,10 +580,7 @@ CREATE OR REPLACE FUNCTION MADLIB_SCHEMA.rf_train
     result_rf_table_name        TEXT
     ) 
 RETURNS MADLIB_SCHEMA.rf_train_result AS $$
-DECLARE
-    ret                         MADLIB_SCHEMA.rf_train_result;
-BEGIN   
-    /*
+    """
         There is a well-known bootstrap method, called 0.632 bootstrap. According
         to the book "Data mining concepts and techniques, 3rd Edition", if we
         are given a data set of D tuples and each tuple has a probability 1/d of 
@@ -668,30 +590,14 @@ BEGIN
         Thus, 36.8% of tuples will not be selected for training. And the remaining 
         63.2% will form the training set.
         Therefore, we set the default value of 'sampling ratio' to 0.632.
-    */
-    ret = MADLIB_SCHEMA.rf_train
-            (
-                split_criterion,
-                training_table_name,
-                result_rf_table_name,
-                10, 
-                null,
-                0.632,
-                null,
-                null,
-                'id',
-                'class',
-                'explicit',
-                10,
-                0.0,
-                0.0,
-                0,
-                0
-            );
+    """
+    PythonFunctionBodyOnly(`cart', `rf')
+
+    return rf.rf_train(MADlibSchema, split_criterion, training_table_name, result_rf_table_name, 10,
+        None, 0.632, None, None, 'id', 'class', 10, 0.0, 0.0, 0
+    )
     
-    RETURN ret;
-END
-$$ LANGUAGE PLPGSQL;
+$$ LANGUAGE PLPYTHONU;
 
 
 /**
@@ -712,87 +618,12 @@ CREATE OR REPLACE FUNCTION MADLIB_SCHEMA.rf_display
     rf_table_name   TEXT,
     tree_id         INT[],
     max_depth       INT
-    ) 
+    )
 RETURNS SETOF TEXT AS $$
-DECLARE
-    tid     INT;
-    tids    INT[];
-    str     TEXT;
-    max_tid INT;
-    i		INT;
-BEGIN
-    -- get rid of the messages whose severity level is lower than 'WARNING'
-    SET client_min_messages = WARNING;
-    
-    PERFORM MADLIB_SCHEMA.__assert
-            (
-                (rf_table_name IS NOT NULL) AND
-                (
-                 MADLIB_SCHEMA.__table_exists
-                    (
-                        rf_table_name
-                    )
-                ),
-                'the specified tree table' || 
-                coalesce
-                (
-                    '<' || rf_table_name || '> does not exists', 
-                    ' is NULL'
-                )
-            ); 
+    PythonFunctionBodyOnly(`cart', `rf')
 
-    PERFORM MADLIB_SCHEMA.__assert
-            (
-				max_depth IS NULL OR
-				max_depth > 0,
-				'the max tree depth must be NULL or greater than 0'              
-            );   
-
-    -- IF tree_id is null, display all these trees
-    IF (tree_id IS NULL) THEN
-        FOR tid IN EXECUTE 'SELECT distinct tid FROM '||rf_table_name LOOP
-            tids = array_append(tids, tid);
-        END LOOP;
-    ELSE
-		tids = tree_id;
-		EXECUTE 'SELECT max(tid) FROM '||rf_table_name INTO max_tid;
-	 
-		FOR i IN 1..array_upper(tids, 1) LOOP
-			tid = tids[i];
-			PERFORM MADLIB_SCHEMA.__assert
-					(
-						tid IS NOT NULL AND
-						tid > 0			AND
-						tid <= max_tid, 
-						'the ID of the tree in the array must be in range [1, ' || 
-						max_tid 												|| 
-						']'              
-					);  		
-		END LOOP;
-	END IF;
-    
-    FOR str IN SELECT * FROM 
-m4_changequote(`>>>', `<<<')
-m4_ifdef(>>>__HAS_ORDERED_AGGREGATES__<<<, >>>
-         MADLIB_SCHEMA.__treemodel_display_with_ordered_aggr
-         (
-            rf_table_name,
-            tids,
-            max_depth
-         ) LOOP
-<<<, >>>
-         MADLIB_SCHEMA.__treemodel_display_no_ordered_aggr
-         (
-            rf_table_name,
-            tids,
-            max_depth
-         ) LOOP
-<<<)
-m4_changequote(>>>`<<<, >>>'<<<)
-        RETURN NEXT str;
-    END LOOP;
-    RETURN;
-END $$ LANGUAGE PLPGSQL;
+    return rf.rf_display(MADlibSchema, ref_table_name, tree_id, max_depth)
+$$ LANGUAGE PLPYTHONU;
 
 
 /**
@@ -813,15 +644,10 @@ CREATE OR REPLACE FUNCTION MADLIB_SCHEMA.rf_display
     tree_id         INT[]    
     ) 
 RETURNS SETOF TEXT AS $$
-DECLARE
-    str     TEXT;
-BEGIN
-    FOR str IN SELECT * FROM 
-               MADLIB_SCHEMA.rf_display(rf_table_name,tree_id,NULL) LOOP
-        RETURN NEXT str;
-    END LOOP;
-    RETURN;
-END $$ LANGUAGE PLPGSQL;
+    PythonFunctionBodyOnly(`cart', `rf')
+
+    return rf.rf_display(MADlibSchema, ref_table_name, tree_id)
+$$ LANGUAGE PLPYTHONU;
 
 
 /**
@@ -840,15 +666,10 @@ CREATE OR REPLACE FUNCTION MADLIB_SCHEMA.rf_display
     rf_table_name  TEXT
     ) 
 RETURNS SETOF TEXT AS $$
-DECLARE
-    str     TEXT;
-BEGIN
-    FOR str IN SELECT * FROM 
-               MADLIB_SCHEMA.rf_display(rf_table_name,NULL) LOOP
-        RETURN NEXT str;
-    END LOOP;
-    RETURN;
-END $$ LANGUAGE PLPGSQL;
+    PythonFunctionBodyOnly(`cart', `rf')
+
+    return rf.rf_display(MADlibSchema, ref_table_name, None)
+$$ LANGUAGE PLPYTHONU;
 
 
 /**
@@ -885,100 +706,12 @@ CREATE OR REPLACE FUNCTION MADLIB_SCHEMA.rf_classify
     verbosity                   INT
     ) 
 RETURNS MADLIB_SCHEMA.rf_classify_result AS $$
-DECLARE
-    encoded_table_name  TEXT := '';
-    temp_result_table   TEXT := '';
-    vote_result_table   TEXT;
-    metatable_name      TEXT;
-    result_rec          RECORD;
-    begin_time          TIMESTAMP;
-    curstmt             TEXT;
-    ret                 MADLIB_SCHEMA.rf_classify_result;
-    table_names         TEXT[];
-BEGIN
-    IF (verbosity > 0) THEN
-        -- get rid of the messages whose severity level is lower than 'WARNING'
-        SET client_min_messages = WARNING;
-    END IF;
-    
-    begin_time = clock_timestamp();
+    PythonFunctionBodyOnly(`cart', `rf')
 
-    PERFORM MADLIB_SCHEMA.__assert
-            (
-				is_serial_classification IS NOT NULL,
-				'is_serial_classification must not be null'              
-            );  
-
-    PERFORM MADLIB_SCHEMA.__assert
-            (
-                (result_table_name IS NOT NULL) AND
-                (
-                 NOT MADLIB_SCHEMA.__table_exists
-                    (
-                        result_table_name
-                    )
-                ),
-                'the specified result table' || coalesce('<' || result_table_name || '> exists', ' is NULL')
-            ); 
-
-    IF (is_serial_classification) THEN
-        table_names = MADLIB_SCHEMA.__treemodel_classify_internal_serial
-            			(
-            				classification_table_name, 
-            				rf_table_name, 
-							verbosity
-						);
-    ELSE
-        table_names = MADLIB_SCHEMA.__treemodel_classify_internal
-            			(
-            				classification_table_name, 
-            				rf_table_name, 
-							verbosity
-						);
-    END IF;
-	
-	encoded_table_name= table_names[1];
-    temp_result_table = table_names[2];
-    vote_result_table = temp_result_table||'_vote';
-
-    PERFORM MADLIB_SCHEMA.__treemodel_get_vote_result
-        (
-        temp_result_table, 
-        vote_result_table
-        );
-
-    metatable_name = MADLIB_SCHEMA.__get_metatable_name( rf_table_name );
-
-    SELECT MADLIB_SCHEMA.__format
-        (
-            'SELECT 
-                column_name,
-                MADLIB_SCHEMA.__regclass_to_text(table_oid) as table_name 
-             FROM %
-             WHERE column_type=''c'' LIMIT 1',
-            ARRAY[
-                metatable_name
-            ]
-        ) INTO curstmt;
-    
-    EXECUTE curstmt INTO result_rec;
-            
-   -- translate the encoded class information back
-    EXECUTE 'CREATE TABLE '||result_table_name||' AS SELECT n.id, 
-             m.fval as class,n.prob from '||vote_result_table||
-        ' n,'||result_rec.table_name||' m where n.class=m.code 
-        m4_ifdef(`__GREENPLUM__', `DISTRIBUTED BY (id)');';
-        
-    EXECUTE 'DROP TABLE IF EXISTS ' || encoded_table_name || ';';
-    EXECUTE 'DROP TABLE IF EXISTS ' || temp_result_table || ';';
-    EXECUTE 'DROP TABLE IF EXISTS ' || vote_result_table || ';';
-    EXECUTE 'SELECT COUNT(*) FROM ' ||classification_table_name||';' 
-             INTO ret.input_set_size;
-    
-    ret.classification_time = clock_timestamp() - begin_time;
-    RETURN ret;
-END
-$$ LANGUAGE PLPGSQL;
+    return rf.rf_classify(MADlibSchema, rf_table_name, classification_table_name, result_table_name,
+               is_serial_classification, verbosity
+    )
+$$ LANGUAGE PLPYTHONU;
 
 
 /**
@@ -1004,20 +737,13 @@ CREATE OR REPLACE FUNCTION MADLIB_SCHEMA.rf_classify
     verbosity                   INT
     ) 
 RETURNS MADLIB_SCHEMA.rf_classify_result AS $$
-DECLARE
-    ret MADLIB_SCHEMA.rf_classify_result;
-BEGIN
-	ret = MADLIB_SCHEMA.rf_classify
-	          (
-	          rf_table_name,
-	          classification_table_name, 
-	          result_table_name,
-              'f',
-	          verbosity
-	          );
-	       
-    RETURN ret;
-END $$ LANGUAGE PLPGSQL;
+    PythonFunctionBodyOnly(`cart', `rf')
+
+    return rf.rf_classify(MADlibSchema, rf_table_name, classification_table_name, result_table_name,
+               False, verbosity
+    )
+$$ LANGUAGE PLPYTHONU;
+
 
 
 /**
@@ -1041,20 +767,13 @@ CREATE OR REPLACE FUNCTION MADLIB_SCHEMA.rf_classify
     result_table_name           TEXT
     ) 
 RETURNS MADLIB_SCHEMA.rf_classify_result AS $$
-DECLARE
-    ret MADLIB_SCHEMA.rf_classify_result;
-BEGIN
-	ret = MADLIB_SCHEMA.rf_classify
-	          (
-	          rf_table_name,
-	          classification_table_name, 
-	          result_table_name,
-              'f',
-	          0
-	          );
-	       
-    RETURN ret;
-END $$ LANGUAGE PLPGSQL;
+    PythonFunctionBodyOnly(`cart', `rf')
+
+    return rf.rf_classify(MADlibSchema, rf_table_name, classification_table_name, result_table_name,
+               False, 0
+    )
+
+$$ LANGUAGE PLPYTHONU;
 
 
 /**
@@ -1076,15 +795,10 @@ CREATE OR REPLACE FUNCTION MADLIB_SCHEMA.rf_score
     verbosity                   INT
     ) 
 RETURNS FLOAT8 AS $$
-BEGIN
-    RETURN  MADLIB_SCHEMA.__treemodel_score
-                   (
-                   rf_table_name,
-                   scoring_table_name,
-                   verbosity
-                   );
-END;
-$$ LANGUAGE PLPGSQL;
+    PythonFunctionBodyOnly(`cart', `rf')
+
+    return rf.rf_score(MADlibSchema, rf_table_name, scoring_table_name, verbosity)
+$$ LANGUAGE PLPYTHONU;
 
 
 /**
@@ -1103,10 +817,10 @@ CREATE OR REPLACE FUNCTION MADLIB_SCHEMA.rf_score
     scoring_table_name          TEXT
     ) 
 RETURNS FLOAT8 AS $$
-BEGIN
-    RETURN MADLIB_SCHEMA.rf_score(rf_table_name, scoring_table_name, 0);
-END;
-$$ LANGUAGE PLPGSQL;
+    PythonFunctionBodyOnly(`cart', `rf')
+
+    return rf.rf_score(MADlibSchema, rf_table_name, scoring_table_name, 0)
+$$ LANGUAGE PLPYTHONU;
 
 
 /**
@@ -1122,10 +836,7 @@ CREATE OR REPLACE FUNCTION MADLIB_SCHEMA.rf_clean
     rf_table_name TEXT
     ) 
 RETURNS BOOLEAN AS $$
-DECLARE
-    result BOOLEAN;
-BEGIN
-    result = MADLIB_SCHEMA.__treemodel_clean(rf_table_name);
-    RETURN result;
-END
-$$ LANGUAGE PLPGSQL;
+    PythonFunctionBodyOnly(`cart', `rf')
+
+    return rf.rf_clean(MADlibSchema, rf_table_name)
+$$ LANGUAGE PLPYTHONU;

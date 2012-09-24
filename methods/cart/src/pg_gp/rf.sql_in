@@ -622,7 +622,7 @@ CREATE OR REPLACE FUNCTION MADLIB_SCHEMA.rf_display
 RETURNS SETOF TEXT AS $$
     PythonFunctionBodyOnly(`cart', `rf')
 
-    return rf.rf_display(MADlibSchema, ref_table_name, tree_id, max_depth)
+    return rf.rf_display(MADlibSchema, rf_table_name, tree_id, max_depth)
 $$ LANGUAGE PLPYTHONU;
 
 
@@ -646,7 +646,7 @@ CREATE OR REPLACE FUNCTION MADLIB_SCHEMA.rf_display
 RETURNS SETOF TEXT AS $$
     PythonFunctionBodyOnly(`cart', `rf')
 
-    return rf.rf_display(MADlibSchema, ref_table_name, tree_id)
+    return rf.rf_display(MADlibSchema, rf_table_name, tree_id)
 $$ LANGUAGE PLPYTHONU;
 
 
@@ -668,7 +668,7 @@ CREATE OR REPLACE FUNCTION MADLIB_SCHEMA.rf_display
 RETURNS SETOF TEXT AS $$
     PythonFunctionBodyOnly(`cart', `rf')
 
-    return rf.rf_display(MADlibSchema, ref_table_name, None)
+    return rf.rf_display(MADlibSchema, rf_table_name, None)
 $$ LANGUAGE PLPYTHONU;
 
 

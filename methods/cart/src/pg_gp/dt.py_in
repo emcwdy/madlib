@@ -1962,12 +1962,12 @@ def __display_node_sfunc(
             ret += " = " + util.__coalesce(curr_val, "null") + " "
     else :
         ret += "Root Node"
-    ret += " : class({max_class})    num_elements({num_of_samples})    " + \
-           "predict_prob({max_prob})".format(
-               max_class = util.__coalesce(max_class, "null"),
-               num_of_samples = util.__coalesce(num_of_samples, 0),
-               max_prob = util.__coalesce(max_prob, 0)
-           )
+    
+    ret += " : class(" + util.__coalesce(max_class, "null") + ")   " + \
+           "num_elements(" + str(util.__coalesce(num_of_samples, 0)) + \
+           ")  " + \
+           "predict_prob(" + str(util.__coalesce(max_prob, 0)) + ")"
+
     ret += "\n"
 
     # If there exists information, append the information
@@ -2249,16 +2249,14 @@ def __display_tree_no_ordered_aggr (
     else :
         ret += "Root Node "
 
-    ret += " : class({class_value})   num_elements({num_elements})  " + \
-           "predict_prob({predict_prob})".format (
-               class_value = preproc.__get_class_value(
-                                 madlib_schema, 
-                                 max_class,
-                                 metatable_name
-                             ),
-               num_elements = str(num_of_samples),
-               predict_prob = str(probability)
-           )
+    ret += " : class(" + \
+           preproc.__get_class_value(
+               madlib_schema,
+               max_class,
+               metatable_name
+           ) + ")   " + \
+           "num_elements(" + str(num_of_samples) + ")  " + \
+           "predict_prob(" + str(probability) + ")"
 
     ret += "\n"
 
@@ -3258,8 +3256,8 @@ def __check_dt_common_params (
     util.__assert(
         training_table_name is not None         and 
         util.__table_exists(madlib_schema, training_table_name),
-        "the specified training table <{training_table_name}> " + \
-        "does not exist".format(
+        ("the specified training table <{training_table_name}> " + \
+        "does not exist").format(
             training_table_name = training_table_name
         )
     )

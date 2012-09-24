@@ -1,0 +1,457 @@
+# coding=utf-8
+
+"""
+ @file rf.py_in
+ @brief random forest APIs and main control logic written in PL/PYTHON
+ @date Sep 5, 2012
+
+"""
+
+import plpy
+import dt_utility as util
+import datetime
+import dt_preproc as preproc
+import dt
+
+def rf_train(
+    madlib_schema               ,
+    split_criterion             ,
+    training_table_name         ,
+    result_rf_table_name        ,
+    num_trees                   ,
+    features_per_node           ,
+    sampling_percentage         ,
+    continuous_feature_names    ,
+    feature_col_names           ,
+    id_col_name                 ,
+    class_col_name              ,
+    how2handle_missing_value    ,
+    max_tree_depth              ,
+    node_prune_threshold        ,
+    node_split_threshold        ,
+    verbosity
+):
+    """
+    @brief This API is defined for training a random forest.
+           The training function provides a number of parameters that enables
+           more flexible controls on how an RF is generated. It constructs the
+           RF based on a training set stored in a database table, each row of
+           which defines a set of features, an ID, and a labeled class. Features
+           could be either discrete or continuous. All the DTs of the result RF
+           will be kept in a single table.
+           
+           We discretize continuous features on local regions during training
+           rather than discretizing on the whole dataset prior to training 
+           because local discretization takes into account the context 
+           sensitivity.
+
+    @param split_criterion           The name of the split criterion that should
+                                     be used
+
+                                     for tree construction. The valid values are
+                                     ‘infogain’, ‘gainratio’, and ‘gini’. It 
+                                     can't be NULL.
+                                     Information gain(infogain) and gini 
+                                     index(gini) are biased toward multivalued 
+                                     attributes. Gain ratio(gainratio) adjusts
+                                     for this bias. However, it tends to prefer 
+                                     unbalanced splits in which one partition is
+                                     much smaller than the others.
+    @param training_table_name       The name of the table/view with the 
+                                     training data.
+                                     It can't be NULL and must exist.
+    @param result_rf_table_name      The name of the table where the resulting
+                                     trees will be stored. It can't be NULL and 
+                                     must not exist.
+    @param num_trees                 The number of trees to be trained.
+                                     If it's NULL, 10 will be used.
+    @param features_per_node         The number of features to be considered 
+                                     when finding a best split. If it's NULL,
+                                     sqrt(p), where p is the number of features,
+                                     will be used.
+    @param sampling_percentage       The percentage of records sampled to train 
+                                     a tree.
+                                     If it's NULL, 0.632 bootstrap will be used
+    @param continuous_feature_names  A comma-separated list of the names of the
+                                     features whose values are continuous.
+                                     NULL means there are no continuous 
+                                     features.
+    @param feature_col_names         A comma-separated list of names of the 
+                                     table columns, each of which defines a 
+                                     feature. NULL means all the columns except
+                                     the ID and Class columns will be treated as
+                                     features.
+    @param id_col_name               The name of the column containing id of 
+                                     each record.
+
+                                     It can't be NULL.
+    @param class_col_name            The name of the column containing correct
+                                     class of each record. It can't be NULL.
+    @param how2handle_missing_value  The way to handle missing value. The valid
+                                     values are 'explicit' and 'ignore'. It
+                                     can't be NULL.
+    @param max_tree_depth            The maximum tree depth. It can't be NULL.
+    @param node_prune_threshold      The minimum percentage of the number of 
+                                     records required in a child node. It can't
+                                     be NULL. The range of it is in [0.0, 1.0].
+                                     This threshold only applies to the non-root
+                                     nodes. Therefore,
+                                     if the percentage(p) between the sampled 
+                                     training set size of a tree (the number of
+                                     rows) and the total training set size is 
+                                     less than or equal to the value of this
+                                     parameter, then the tree only has
+                                     one node (the root node);
+                                     if its value is 1, then the percentage p is
+                                     less than or equal to 1
+                                     definitely. Therefore, the tree only has 
+                                     one node (the root node).
+                                     if its value is 0, then no nodes will be 
+                                     pruned by this parameter.
+    @param node_split_threshold      The minimum percentage of the number of 
+                                     records required in a node in order for a
+                                     further split to be possible.
+                                     It can't be NULL. The range of it is in
+                                     [0.0, 1.0].
+                                     If the percentage(p) between the sampled 
+                                     training set size of a tree
+                                     (the number of rows) and the total training
+                                     set size is less than the value of this
+                                     parameter, then the root node will be a
+                                     leaf one.
+                                     Therefore, the trained tree only has one 
+                                     node.
+                                     If the percentage p is equal to the value
+                                     of this parameter, then the trained tree 
+                                     only has two levels, since only the root
+                                     node will grow.
+
+                                     (the root node);
+                                     if its value is 0, then trees can grow 
+                                     extensively.
+    @param verbosity                 > 0 means this function runs in verbose 
+                                     mode.
+                                     It can't be NULL.
+    @return An rf_train_result object.
+    """
+    h2hmv_routine_in = 1
+    class ret : pass
+    
+    begin_func_exec = datetime.datetime.now()
+
+    if verbosity < 1 :
+        plpy.execute("SET client_min_messages = WARNING")
+
+    util.__assert(
+        num_trees is not None and 
+        sampling_percentage is not None and 
+        num_trees > 0 and 
+        features_per_node is None or features_per_node > 0 and 
+        sampling_percentage > 0,
+        "invalid parameter value for num_trees, " + \
+        "features_per_node or sampling_percentage"
+    )
+
+    rf_table_name = result_rf_table_name.lower().strip()
+
+    dt.__check_dt_common_params
+    (
+        madlib_schema,
+        split_criterion,
+        training_table_name,
+        rf_table_name,
+        continuous_feature_names,
+        feature_col_names,
+        id_col_name,
+        class_col_name,
+        how2handle_missing_value,
+        max_tree_depth,
+        node_prune_threshold,
+        node_split_threshold,
+        verbosity,
+       'random forest',
+    )
+
+    train_rs = dt.__encode_and_train (
+                   madlib_schema,
+                   'RF',
+                   split_criterion,
+                   num_trees,
+                   features_per_node,
+                   training_table_name,
+                   None,
+                   rf_table_name,
+                   continuous_feature_names,
+                   feature_col_names,
+                   id_col_name,
+                   class_col_name,
+                   100.0,
+                   how2handle_missing_value,
+                   max_tree_depth,
+                   sampling_percentage,
+                   True,
+                   node_prune_threshold,
+                   node_split_threshold,
+                   '<RF table schema name>_<RF table name>',
+                   verbosity
+               )
+
+    if verbosity > 0 :
+        plpy.info(
+            "Training Total Time: " + \
+            str(datetime.datetime.now() - begin_func_exec)
+        )
+        plpy.info("Training result: " + str(train_rs))
+
+    ret.training_time           = datetime.datetime.now() - begin_func_exec
+    ret.num_of_samples          = train_rs.num_of_samples
+    ret.num_trees               = num_trees
+    ret.features_per_node       = train_rs.features_per_node
+    ret.num_tree_nodes          = train_rs.num_tree_nodes
+    ret.max_tree_depth          = train_rs.max_tree_depth
+    ret.split_criterion         = split_criterion
+
+    return ret
+
+
+def rf_display(
+    madlib_schema,
+    rf_table_name,
+    tree_id,
+    max_depth = None
+):
+    """
+    @brief Display the trees in the random forest with human readable format.
+
+    @param rf_table_name The name of RF table. It can't be NULL and must exist.
+    @param tree_id       The trees to be displayed. If it's NULL, we
+                         display all the trees.
+    @param max_depth     The max depth to be displayed. If It's NULL, this
+                         function will show all levels.
+
+    @return The text representing the trees in random forest with human
+            readable format.
+    """
+    tids = []
+
+    # get rid of the messages whose severity level is lower than 'WARNING'
+    plpy.execute("SET client_min_messages = WARNING")
+
+    util.__assert(
+        rf_table_name is not None and 
+        util.__table_exists(madlib_schema, rf_table_name),
+        "the specified tree table <" + str(rf_table_name) + "> does not exists" 
+    )
+
+    util.__assert(
+        max_depth is None or max_depth > 0,
+        "the max tree depth must be NULL or greater than 0"
+    )
+
+    # IF tree_id is null, display all these trees
+    if tree_id is None :
+        t = plpy.execute("SELECT distinct tid FROM " + rf_table_name)
+        for r in t :
+            tid = r["tid"]
+            tids.append(tid)
+    else :
+        tids = tree_id
+        t = plpy.execute("SELECT max(tid) AS max FROM " + rf_table_name)
+        max_id = util.__get_returns(t, "max")
+
+        for tid in tids :
+            util.__assert(
+                tid is not None and tid > 0 and tid <= max_tid,
+                "he ID of the tree in the array must be in range " + \
+                "[1,{max_id}]".format(max_id = max_id)
+            )
+
+m4_changequote(`>>>', `<<<')
+m4_ifdef(>>>__HAS_ORDERED_AGGREGATES__<<<, >>>
+    res = dt.__treemodel_display_with_ordered_aggr (
+              madlib_schema,
+              rf_table_name,
+              tids,
+              max_depth
+          )
+<<<, >>>
+    res = dt.__treemodel_display_no_ordered_aggr (
+              madlib_schema,
+              rf_table_name,
+              tids,
+              max_depth
+          )
+<<<)
+m4_changequote(>>>`<<<, >>>'<<<)
+
+    return res
+
+
+def rf_classify(
+    madlib_schema,
+    rf_table_name,
+    classification_table_name,
+    result_table_name,
+    is_serial_classification,
+    verbosity
+):
+    """
+    @brief Classify dataset using a trained RF.
+    
+    The classification result will be stored in the table which is defined
+    as:
+
+    CREATE TABLE classification_result
+    (
+        id        INT|BIGINT,
+        class     SUPPORTED_DATA_TYPE,
+        prob      FLOAT
+    );
+
+    @param rf_table_name             The name of RF table. It can't be NULL.
+    @param classification_table_name The name of the table/view that keeps the 
+                                     data to be classified. It can't be NULL
+                                     and must exist.
+    @param result_table_name         The name of result table. It can't be NULL
+                                     and must exist.
+    @param is_serial_classification  Whether classify with all trees at a time 
+                                     or one by one. It can't be NULL.
+    @param verbosity                 > 0 means this function runs in verbose mode.
+                                     It can't be NULL.
+
+    @return A rf_classify_result object.
+    """
+    encoded_table_name = ""
+    temp_result_table = ""
+    table_names = []
+    class ret : pass
+
+    if verbosity > 0 :
+        # get rid of the messages whose severity level is lower than 'WARNING'
+        plpy.execute("SET client_min_messages = WARNING")
+
+    begin_time = datetime.datetime.now()
+
+    util.__assert(
+        is_serial_classification is not None,
+        "is_serial_classification must not be null" 
+    )
+
+    util.__assert(
+        result_table_name is not None and 
+        not util.__table_exists(madlib_schema, result_table_name),
+        "the specified result table <" + str(result_table_name) + "> exists"
+    )
+
+    if is_serial_classification :
+        table_names = dt.__treemodel_classify_internal_serial (
+                          madlib_schema, 
+                          classification_table_name,
+                          rf_table_name,
+                          verbosity
+                      )
+    else :
+        table_names = dt.__treemodel_classify_internal (
+                          madlib_schema, 
+                          classification_table_name,
+                          rf_table_name,
+                          verbosity
+                      )
+
+    encoded_table_name = table_names[0]
+    temp_result_table = table_names[1]
+    vote_result_table = temp_result_table + "_vote"
+
+    plpy.execute(
+        """
+        SELECT {madlib_schema}.__treemodel_get_vote_result(
+            '{temp_result_table}',
+            '{vote_result_table}'
+        )
+        """.format (
+            madlib_schema = madlib_schema, 
+            temp_result_table = temp_result_table,
+            vote_result_table = vote_result_table
+        )
+    )
+    metatable_name = dt.__get_metatable_name(madlib_schema, rf_table_name)
+
+    curstmt = """
+              SELECT column_name,
+                  {madlib_schema}.__regclass_to_text(table_oid) AS table_name
+              FROM {metatable_name}
+              WHERE column_type = 'c' LIMIT 1
+              """.format(
+                  madlib_schema = madlib_schema,
+                  metatable_name = metatable_name
+              )
+    t = plpy.execute(curstmt)
+    result_rec = util.__get_record(t)
+
+    # translate the encoded class information back
+    plpy.execute(
+        """
+        CREATE TABLE {result_table_name} AS
+        SELECT n.id, m.fval as class, n.prob 
+        FROM {vote_result_table} n, {rec_table_name} m
+        WHERE n.class = m.code
+        m4_ifdef(`__GREENPLUM__', `DISTRIBUTED BY (id)')
+        """.format(
+            result_table_name = result_table_name,
+            vote_result_table = vote_result_table,
+            rec_table_name = result_rec["table_name"]
+        )
+    )
+    plpy.execute("DROP TABLE IF EXISTS " + str(encoded_table_name))
+    plpy.execute("DROP TABLE IF EXISTS " + str(temp_result_table))
+    plpy.execute("DROP TABLE IF EXISTS " + str(vote_result_table))
+    t = plpy.execute(
+            "SELECT COUNT(*) AS count FROM " + str(classification_table_name)
+        )
+
+    ret.input_set_size = util.__get_returns(t, "count")
+    ret.classification_time = datetime.datetime.now() - begin_time
+
+    return ret
+    
+
+def rf_score(
+    madlib_schema,
+    rf_table_name,
+    scoring_table_name,
+    verbosity
+):
+    """
+    @brief Check the accuracy of a trained RF with a scoring set.
+
+    @param rf_table_name             The name of RF table. It can't be NULL.
+    @param scoring_table_name        The name of the table/view that keeps 
+                                     the data to be scored. It can't be NULL 
+                                     and must exist.
+    @param verbosity                 > 0 means this function runs in verbose 
+                                     mode.
+                                     It can't be NULL.
+
+    @return The estimated accuracy information.
+    """
+    return dt.__treemodel_score(
+               madlib_schema,
+               rf_table_name,
+               scoring_table_name,
+               verbosity
+           )
+
+
+def rf_clean(madlib_schema, rf_table_name):
+    """
+    @brief Cleanup the trained random forest table and any relevant tables.
+
+    @param rf_table_name             The name of RF table. It can't be NULL.
+
+    @return The status of that cleanup operation.
+    """
+    return dt.__treemodel_clean(madlib_schema, rf_table_name)
+
+
+
+

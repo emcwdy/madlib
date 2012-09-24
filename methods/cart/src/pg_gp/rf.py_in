@@ -257,7 +257,7 @@ def rf_display(
     else :
         tids = tree_id
         t = plpy.execute("SELECT max(tid) AS max FROM " + rf_table_name)
-        max_id = util.__get_returns(t, "max")
+        max_id = util.__get_query_value(t, "max")
 
         for tid in tids :
             util.__assert(
@@ -386,7 +386,7 @@ def rf_classify(
                   metatable_name = metatable_name
               )
     t = plpy.execute(curstmt)
-    result_rec = util.__get_record(t)
+    result_rec = util.__get_query_record(t)
 
     # translate the encoded class information back
     plpy.execute(
@@ -409,7 +409,7 @@ def rf_classify(
             "SELECT COUNT(*) AS count FROM " + str(classification_table_name)
         )
 
-    ret.input_set_size = util.__get_returns(t, "count")
+    ret.input_set_size = util.__get_query_value(t, "count")
     ret.classification_time = datetime.datetime.now() - begin_time
 
     return ret

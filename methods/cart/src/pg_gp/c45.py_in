@@ -231,7 +231,7 @@ def c45_genrule(madlib_schema, tree_table_name, verbosity = 0):
               """.format(tree_table_name = tree_table_name)
 
     t = plpy.execute(curstmt)
-    rec = util.__get_record(t) # rec is a record t[0]
+    rec = util.__get_query_record(t) # rec is a record t[0]
 
     # in sample the root node is leaf
     if rec["lmc_nid"] is None :
@@ -532,7 +532,7 @@ def c45_classify(
                   metatable_name = metatable_name
               )
     t = plpy.execute(curstmt)
-    result_rec = util.__get_record(t)
+    result_rec = util.__get_query_record(t)
 
     # translate the encoded class information back
     curstmt = """
@@ -555,7 +555,7 @@ def c45_classify(
             "SELECT COUNT(*) AS count FROM  " + \
             str(classification_table_name)
         )
-    ret.input_set_size = util.__get_returns(t, "count")
+    ret.input_set_size = util.__get_query_value(t, "count")
     ret.classification_time = datetime.datetime.now() - begin_time
     
     return ret

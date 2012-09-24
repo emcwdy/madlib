@@ -232,4 +232,4 @@ def __columns_in_table(
                 training_table_name = training_table_name
             )
         )
-    return __get_returns(t, "existence")
+    return __get_query_value(t, "existence")

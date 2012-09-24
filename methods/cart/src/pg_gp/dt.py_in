@@ -121,7 +121,7 @@ def __get_encode_table_name(madlib_schema, tree_table):
            ) 
     encoded_table_name_t = plpy.execute(stmt)
     
-    return util.__get_returns(encoded_table_name_t, "encode_table_name")
+    return util.__get_query_value(encoded_table_name_t, "encode_table_name")
 
 
 def __is_valid_enc_table(madlib_schema, enc_tbl_name):
@@ -154,7 +154,7 @@ def __is_valid_enc_table(madlib_schema, enc_tbl_name):
            )
 
     t = plpy.execute(stmt)
-    num_enc_table = util.__get_returns(t, "count")
+    num_enc_table = util.__get_query_value(t, "count")
 
     # test if the name and the type of a column are valid or not
     stmt = """
@@ -168,7 +168,7 @@ def __is_valid_enc_table(madlib_schema, enc_tbl_name):
                      'float8'::regtype, 'bool'::regtype, 'int'::regtype)
            """.format(enc_tbl_name = enc_tbl_name)
     t = plpy.execute(stmt)
-    num_cols = util.__get_returns(t, "count")
+    num_cols = util.__get_query_value(t, "count")
 
     if (num_enc_table > 0) and (num_cols == 5) :
         ret = True
@@ -202,7 +202,7 @@ def __get_metatable_name(madlib_schema, tree_table):
            )
     metatable_name_t = plpy.execute(stmt)
 
-    return util.__get_returns(metatable_name_t, "metatable_name")
+    return util.__get_query_value(metatable_name_t, "metatable_name")
 
 
 def __get_routine_id(madlib_schema, tree_table):
@@ -248,7 +248,7 @@ def __get_routine_name(madlib_schema, tree_table):
            )
     name_t = plpy.execute(stmt)
  
-    return util.__get_returns(name_t, "name")
+    return util.__get_query_value(name_t, "name")
 
 
 def __get_tree_table_name(madlib_schema, enc_table_name):
@@ -272,7 +272,7 @@ def __get_tree_table_name(madlib_schema, enc_table_name):
               )  
     t = plpy.execute(curstmt)
     
-    return util.__get_returns(t, "name")
+    return util.__get_query_value(t, "name")
 
 
 def __get_features_of_nodes (
@@ -391,7 +391,7 @@ def __gen_acc(
               """.format(metatable_name = metatable_name)
     
     t = plpy.execute(curstmt)
-    num_fids = util.__get_returns(t, "count")
+    num_fids = util.__get_query_value(t, "count")
 
     # preprocessing time
     ret.calc_pre_time = datetime.datetime.now() - begin_calc_pre
@@ -921,7 +921,7 @@ def __rep_prune_tree(
                                      )
               )
     n_t = plpy.execute(curstmt)
-    n = util.__get_returns(n_t, "count")
+    n = util.__get_query_value(n_t, "count")
 
     util.__assert (
         n == 0,
@@ -1009,7 +1009,7 @@ m4_changequote(>>>`<<<, >>>'<<<)
         t = plpy.execute(
                 "SELECT parent_id FROM selected_parent_ids_rep limit 1"
             )
-        num_parent_ids = util.__get_returns(t, "parent_id")
+        num_parent_ids = util.__get_query_value(t, "parent_id")
         
         if num_parent_ids is None:
            break
@@ -1124,7 +1124,7 @@ def __ebp_prune_tree(madlib_schema, tree_table_name):
                 SELECT parent_id FROM selected_parent_ids_ebp LIMIT 1
                 """
             )
-        num_parent_ids = util.__get_returns(t, "parent_id")
+        num_parent_ids = util.__get_query_value(t, "parent_id")
 
         if num_parent_ids is None:
             break
@@ -1216,7 +1216,7 @@ def __generate_final_tree(madlib_schema, result_tree_table_name):
         plpy.execute(curstmt)
 
         t = plpy.execute("SELECT count(*) AS count FROM trim_tree_aux_table")
-        num_redundant_nodes = util.__get_returns(t, "count")
+        num_redundant_nodes = util.__get_query_value(t, "count")
 
         if num_redundant_nodes <= 0 :
             break
@@ -1280,7 +1280,7 @@ m4_ifdef(>>>__GREENPLUM__<<<, >>>
             WHERE content <> -1
             """
         )
-    segment_num = util.__get_returns(t, "count")
+    segment_num = util.__get_query_value(t, "count")
 <<<, >>>
     # fix the segment number to 1 for PG
     segment_num = 1
@@ -1312,9 +1312,9 @@ m4_changequote(>>>`<<<, >>>'<<<)
             FROM 
             """ + src_table
         )
-    max_id = util.__get_returns(t, "max")
-    min_id = util.__get_returns(t, "min")
-    record_num = util.__get_returns(t, "record_num")
+    max_id = util.__get_query_value(t, "max")
+    min_id = util.__get_query_value(t, "min")
+    record_num = util.__get_query_value(t, "record_num")
 
     range = max_id - min_id + 1
 
@@ -1507,7 +1507,7 @@ def __train_tree (
               WHERE column_type = 'f'
               """.format(training_table_meta = training_table_meta)
     t = plpy.execute(curstmt)
-    attr_count = util.__get_returns(t, "count")
+    attr_count = util.__get_query_value(t, "count")
 
     # generate the horizontal table for updating assinged node IDs
     preproc.__gen_horizontal_encoded_table(
@@ -1519,7 +1519,7 @@ def __train_tree (
     )
 
     t = plpy.execute("SELECT count(*) AS count FROM tmp_dt_hori_table")
-    total_size = util.__get_returns(t, "count")
+    total_size = util.__get_query_value(t, "count")
 
     if verbosity > 0 :
         plpy.info("INPUT TABLE SIZE: " + str(total_size))
@@ -1595,7 +1595,7 @@ def __train_tree (
                     curr_level = curr_level
                 )
             )
-        num_live_nodes = util.__get_returns(t, "count")
+        num_live_nodes = util.__get_query_value(t, "count")
 
         if num_live_nodes < 1 :
             if verbosity > 0 :
@@ -1748,7 +1748,7 @@ def __train_tree (
         plpy.execute(curstmt)
 
         t = plpy.execute("SELECT max(id) AS max FROM " + result_tree_table_name)
-        max_nid = util.__get_returns(t, "max")
+        max_nid = util.__get_query_value(t, "max")
 
         if verbosity > 0 :
             plpy.info(
@@ -1902,8 +1902,8 @@ def __train_tree (
               FROM {result_tree_table_name}
               """.format(result_tree_table_name = result_tree_table_name)
     t = plpy.execute(curstmt)
-    ret.num_tree_nodes = int(util.__get_returns(t, "count"))
-    ret.max_tree_depth = int(util.__get_returns(t, "max"))
+    ret.num_tree_nodes = int(util.__get_query_value(t, "count"))
+    ret.max_tree_depth = int(util.__get_query_value(t, "max"))
 
     ret.features_per_node   = int(features_per_node)
     ret.num_of_samples      = int(total_size)
@@ -2085,7 +2085,7 @@ def __treemodel_display_with_ordered_aggr(
               )
     t = plpy.execute(curstmt)
 
-    table_name = util.__get_returns(t, "table_name")
+    table_name = util.__get_query_value(t, "table_name")
 
     if table_name is not None :
         # Convert back for the class column.
@@ -2225,13 +2225,13 @@ def __display_tree_no_ordered_aggr (
               )  
     t = plpy.execute(curstmt)
 
-    tree_location    = util.__get_returns(t,"tree_location")
-    feature          = util.__get_returns(t,"feature")
-    is_cont          = util.__get_returns(t,"is_cont")
-    temp_split_value = util.__get_returns(t,"temp_split_value")
-    max_class        = util.__get_returns(t,"max_class")
-    num_of_samples   = util.__get_returns(t,"num_of_samples")
-    probability      = util.__get_returns(t,"probability") 
+    tree_location    = util.__get_query_value(t,"tree_location")
+    feature          = util.__get_query_value(t,"feature")
+    is_cont          = util.__get_query_value(t,"is_cont")
+    temp_split_value = util.__get_query_value(t,"temp_split_value")
+    max_class        = util.__get_query_value(t,"max_class")
+    num_of_samples   = util.__get_query_value(t,"num_of_samples")
+    probability      = util.__get_query_value(t,"probability") 
 
     curr_value = tree_location[len(tree_location) - 1]
     
@@ -2500,7 +2500,7 @@ def __treemodel_classify_internal(
             "SELECT max(array_upper(tree_location,1)) AS max FROM " + \
             tree_table_name
         )
-    max_level = util.__get_returns(t, "max")
+    max_level = util.__get_query_value(t, "max")
 
     if max_level is None :
         plpy.error("tree should not be empty")
@@ -2516,7 +2516,7 @@ def __treemodel_classify_internal(
         t = plpy.execute(
                 "SELECT count(id) as count FROM " + result_table_name
             )
-        size_finished = util.__get_returns(t, "count")
+        size_finished = util.__get_query_value(t, "count")
 
         if verbosity > 0 :
             plpy.info("size_finished " + str(size_finished))
@@ -2525,7 +2525,7 @@ def __treemodel_classify_internal(
                 "SELECT count(*) AS count FROM " + \
                 table_names[(table_pick) % 2 + 1 - 1]
             )
-        remains_to_classify = util.__get_returns(t, "count")
+        remains_to_classify = util.__get_query_value(t, "count")
 
         if remains_to_classify == 0 :
             if verbosity > 0 :
@@ -2801,7 +2801,7 @@ def __treemodel_classify_internal_serial (
                     tree_id = tree_id
                 )
             )
-        max_level = util.__get_returns(t, "max")
+        max_level = util.__get_query_value(t, "max")
      
         if max_level is None :
             plpy.error("tree should not be empty")
@@ -2818,7 +2818,7 @@ def __treemodel_classify_internal_serial (
                     tid = tree_id
                 )
             )
-        root_id = util.__get_returns(t, "id")
+        root_id = util.__get_query_value(t, "id")
 
         curstmt = """
                   INSERT INTO classified_instance_ping (id, jump, class, prob)
@@ -2843,7 +2843,7 @@ def __treemodel_classify_internal_serial (
             t = plpy.execute(
                 "SELECT count(id) AS count FROM " + result_table_name
                 )
-            size_finished = util.__get_returns(t, "count")
+            size_finished = util.__get_query_value(t, "count")
 
             if verbosity > 0 :
                 plpy.info("size_finished  " + str(size_finished))
@@ -2854,7 +2854,7 @@ def __treemodel_classify_internal_serial (
                     "SELECT count(*) AS count FROM " + \
                     table_names[(table_pick) % 2 + 1 - 1]
                 )
-            remains_to_classify = util.__get_returns(t, "count")
+            remains_to_classify = util.__get_query_value(t, "count")
 
             if remains_to_classify == 0 :
                 if verbosity > 0 :
@@ -3059,7 +3059,7 @@ def __treemodel_score (
     curstmt = "SELECT count(id) AS count FROM " + result_table_name_final    
  
     t = plpy.execute(curstmt)
-    num_of_row = util.__get_returns(t, "count")
+    num_of_row = util.__get_query_value(t, "count")
 
     curstmt = """
               SELECT count(t2.id) AS count
@@ -3073,7 +3073,7 @@ def __treemodel_score (
               )
 
     t = plpy.execute(curstmt)
-    mis_of_row = util.__get_returns(t, "count")
+    mis_of_row = util.__get_query_value(t, "count")
 
     plpy.execute("DROP TABLE IF EXISTS " + encoded_table_name)
     plpy.execute("DROP TABLE IF EXISTS " + result_table_name)
@@ -3108,7 +3108,7 @@ def __treemodel_clean (
         )
     util.__assert (
         model_table_name is not None and 
-        util.__get_returns(t, "existence"),
+        util.__get_query_value(t, "existence"),
         "the specified tree table <" + model_table_name + "> does not exists"
     )   
 
@@ -3120,7 +3120,7 @@ def __treemodel_clean (
             ) AS existence
             """.format(madlib_schema = madlib_schema)
         )
-    table_exists = util.__get_returns(t, "existence")
+    table_exists = util.__get_query_value(t, "existence")
     
     if table_exists :
         metatable_name = __get_metatable_name(madlib_schema, model_table_name)
@@ -3136,7 +3136,7 @@ def __treemodel_clean (
                         metatable_name = metatable_name
                     )
                 )
-            ref_count = util.__get_returns(t, "count")
+            ref_count = util.__get_query_value(t, "count")
 
             # if the metatable is not referenced by other training procedure.
             if ref_count == 1 :
@@ -3317,7 +3317,7 @@ def __gen_enc_meta_names(
             )
         )
 
-    result_schema_name = util.__get_returns(t, "schema_name")
+    result_schema_name = util.__get_query_value(t, "schema_name")
 
     """
     the maximum length of an identifier 63

@@ -88,7 +88,7 @@ def __validate_input_table(
     stmt += " LIMIT 1;"
     
     rec_t = plpy.execute(stmt)
-    rec_regtype = util.__get_returns(rec_t,"regtype")
+    rec_regtype = util.__get_query_value(rec_t,"regtype")
     
     if(rec_regtype is not None):
         # Print the first unsupported data type, amd supported types.
@@ -141,7 +141,7 @@ def __get_classtable_name(madlib_schema, metatable_name):
           )
     t = plpy.execute(sql)
    
-    return util.__get_returns(t, "table_name")
+    return util.__get_query_value(t, "table_name")
 
 
 def __drop_metatable(madlib_schema, metatable_name):
@@ -324,7 +324,7 @@ def __distinct_feature_value(madlib_schema, metatable_name, feature_id):
               )
     t = plpy.execute(curstmt)
  
-    return util.__get_returns(t, "distinct_feature_value")
+    return util.__get_query_value(t, "distinct_feature_value")
 
 
 def __num_of_feature(madlib_schema, metatable_name):
@@ -342,7 +342,7 @@ def __num_of_feature(madlib_schema, metatable_name):
               """.format(metatable_name = metatable_name)    
     result_t = plpy.execute(curstmt)
 
-    return util.__get_returns(result_t, "count")
+    return util.__get_query_value(result_t, "count")
 
 
 def __num_of_class(madlib_schema, metatable_name):
@@ -362,7 +362,7 @@ def __num_of_class(madlib_schema, metatable_name):
             madlib_schema = madlib_schema
         )
     class_table_name_t = plpy.execute(curstmt)
-    class_table_name = util.__get_returns(class_table_name_t, "table_oid")
+    class_table_name = util.__get_query_value(class_table_name_t, "table_oid")
 
     curstmt = """
               SELECT COUNT(code) AS count
@@ -370,7 +370,7 @@ def __num_of_class(madlib_schema, metatable_name):
               """.format(class_table_name = class_table_name)
     result_t = plpy.execute(curstmt)
 
-    return util.__get_returns(result_t, "count")
+    return util.__get_query_value(result_t, "count")
 
 
 def __get_feature_name(madlib_schema, feature_index, metatable_name):
@@ -392,7 +392,7 @@ def __get_feature_name(madlib_schema, feature_index, metatable_name):
               )
     result_t = plpy.execute(curstmt)
 
-    return util.__get_returns(result_t, "column_name")
+    return util.__get_query_value(result_t, "column_name")
     
 
 def __get_column_value(
@@ -439,8 +439,8 @@ def __get_column_value(
               )
     names_t = plpy.execute(curstmt)
 
-    table_name = util.__get_returns(names_t, "table_oid")
-    column_name = util.__get_returns(names_t, "column_name")
+    table_name = util.__get_query_value(names_t, "table_oid")
+    column_name = util.__get_query_value(names_t, "column_name")
 
     util.__assert(column_name is not None, "No such column name")
     util.__assert(table_name is not None, "No such table name")
@@ -451,7 +451,7 @@ def __get_column_value(
               WHERE code = {column_name};
               """.format(table_name = table_name, column_name = column_name)
     t = plpy.execute(curstmt)
-    result = str(util.__get_returns(t, "fval")) 
+    result = str(util.__get_query_value(t, "fval")) 
   
     return util.__coalesce(result, "null")
 
@@ -499,7 +499,7 @@ def __get_id_column_name(madlib_schema, metatable_name):
               """.format(metatable_name = metatable_name)
     result_t = plpy.execute(curstmt)
     
-    return util.__get_returns(result_t, "column_name") 
+    return util.__get_query_value(result_t, "column_name") 
 
 
 def __get_class_column_name(madlib_schema, metatable_name):
@@ -520,7 +520,7 @@ def __get_class_column_name(madlib_schema, metatable_name):
               """.format(metatable_name = metatable_name)
     result_t = plpy.execute(curstmt)
 
-    return util.__get_returns(result_t, "column_name")
+    return util.__get_query_value(result_t, "column_name")
 
 
 def __get_class_value(madlib_schema, code, metatable_name):
@@ -1048,7 +1048,7 @@ m4_ifdef(`__HAS_ORDERED_AGGREGATES__', >>>
                       cls_col_name = cls_col_name
                   )  
         t = plpy.execute(curstmt)
-        attr_col_names = util.__get_returns(t, "attnames")
+        attr_col_names = util.__get_query_value(t, "attnames")
 <<<, >>>
         curstmt = """
                   SELECT ARRAY
@@ -1069,7 +1069,7 @@ m4_ifdef(`__HAS_ORDERED_AGGREGATES__', >>>
                       cls_col_name = cls_col_name
                   )
         t = plpy.execute(curstmt)
-        attr_col_names = util.__get_returns(t, "arr_attname")
+        attr_col_names = util.__get_query_value(t, "arr_attname")
 <<<)
 m4_changequote(>>>`<<<, >>>'<<<) 
     else :
@@ -1082,7 +1082,7 @@ m4_changequote(>>>`<<<, >>>'<<<)
                     feature_names = util.__list_to_sql(feature_names)
                 )
             )
-        attr_col_names = util.__get_returns(t, "sort_array")
+        attr_col_names = util.__get_query_value(t, "sort_array")
 
     # an array contains if a feature is continuous or not
     # the subscript is corresponding to the feature's ID
@@ -1098,7 +1098,7 @@ m4_changequote(>>>`<<<, >>>'<<<)
                 attr_col_names  = util.__list_to_sql(attr_col_names)
             )
         )
-    is_conts = util.__get_returns(t, "is_conts")
+    is_conts = util.__get_query_value(t, "is_conts")
 
     ret.pre_proc_time = datetime.datetime.now() - exec_begin
     exec_begin = datetime.datetime.now()
@@ -1275,7 +1275,7 @@ def __encode_table_classify(
               """.format(metatable_name = meta_tbl_name)
 
     id_column_name_t = plpy.execute(curstmt)
-    id_col_name = util.__get_returns(id_column_name_t ,"column_name")
+    id_col_name = util.__get_query_value(id_column_name_t ,"column_name")
 
     curstmt = """
               SELECT column_name
@@ -1284,7 +1284,7 @@ def __encode_table_classify(
               """.format(metatable_name = meta_tbl_name)
 
     t = plpy.execute(curstmt)
-    cls_col_name = util.__get_returns(t, "column_name")
+    cls_col_name = util.__get_query_value(t, "column_name")
 
     t = plpy.execute(
             """
@@ -1298,7 +1298,7 @@ def __encode_table_classify(
                 cls_col_name = cls_col_name
             )
         )
-    column_existence = util.__get_returns(t, "ce")
+    column_existence = util.__get_query_value(t, "ce")
 
     if not column_existence :
         cls_col_name = None
@@ -1311,7 +1311,7 @@ m4_ifdef(`__HAS_ORDERED_AGGREGATES__', >>>
               WHERE column_type='f'
               """.format(meta_tbl_name = meta_tbl_name)
     t = plpy.execute(curstmt)
-    attr_col_names = util.__get_returns(t, "agg")
+    attr_col_names = util.__get_query_value(t, "agg")
 
     curstmt = """
               SELECT array_agg(is_cont order by id) as agg
@@ -1331,7 +1331,7 @@ m4_ifdef(`__HAS_ORDERED_AGGREGATES__', >>>
               ) AS attr_col_names
               """.format(meta_tbl_name = meta_tbl_name)
     t = plpy.execute(curstmt)
-    attr_col_names = util.__get_returns(t, "attr_col_names")
+    attr_col_names = util.__get_query_value(t, "attr_col_names")
 
     curstmt = """
               SELECT ARRAY
@@ -1344,7 +1344,7 @@ m4_ifdef(`__HAS_ORDERED_AGGREGATES__', >>>
               ) AS array_is_cont
               """.format(meta_tbl_name = meta_tbl_name)
     t = plpy.execute(curstmt)
-    is_conts = util.__get_returns(t, "array_is_cont")
+    is_conts = util.__get_query_value(t, "array_is_cont")
 <<<)
 m4_changequote(>>>`<<<, >>>'<<<)
 
@@ -1357,7 +1357,7 @@ m4_changequote(>>>`<<<, >>>'<<<)
                   madlib_schema = madlib_schema
               )
     t = plpy.execute(curstmt)
-    kv_attr_name = util.__get_returns(t, "table_name")
+    kv_attr_name = util.__get_query_value(t, "table_name")
 
     curstmt = """
               SELECT {madlib_schema}.__regclass_to_text(table_oid) AS table_name
@@ -1368,7 +1368,7 @@ m4_changequote(>>>`<<<, >>>'<<<)
                   madlib_schema = madlib_schema
               )
     t = plpy.execute(curstmt)
-    kv_cls_name = util.__get_returns(t, "table_name")
+    kv_cls_name = util.__get_query_value(t, "table_name")
 
     __validate_input_table (
         madlib_schema,

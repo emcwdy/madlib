@@ -154,8 +154,7 @@ def rf_train(
 
     rf_table_name = result_rf_table_name.lower().strip()
 
-    dt.__check_dt_common_params
-    (
+    dt.__check_dt_common_params(
         madlib_schema,
         split_criterion,
         training_table_name,
@@ -316,7 +315,8 @@ def rf_classify(
                                      and must exist.
     @param is_serial_classification  Whether classify with all trees at a time 
                                      or one by one. It can't be NULL.
-    @param verbosity                 > 0 means this function runs in verbose mode.
+    @param verbosity                 > 0 means this function runs in verbose
+                                     mode.
                                      It can't be NULL.
 
     @return A rf_classify_result object.

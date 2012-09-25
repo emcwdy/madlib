@@ -5,7 +5,7 @@
 
 @brief Functions used in C4.5 and random forest for data preprocessing
 
-@namespace preproc
+@namespace dt_preproc
 """
 
 import plpy

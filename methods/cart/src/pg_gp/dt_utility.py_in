@@ -22,9 +22,9 @@ def __get_query_value(t, key, i = 0):
     
     @return      The value of the keyword in the ith record. 
     """
-    if t is not None and t.nrows() > 0 :
+    if t is not None and t.nrows() > 0:
         return t[i][key]
-    else :
+    else:
         return None
 
 
@@ -35,9 +35,9 @@ def __get_query_record(t, i = 0):
     @param t    The result getting from plpy.execute(sql)
     @param i    The index of ith record in t, default value is 0.
     """
-    if t is not None and t.nrows() > 0 :
+    if t is not None and t.nrows() > 0:
         return t[i]
-    else :
+    else:
         return None
 
 
@@ -49,9 +49,9 @@ def __coalesce(content, value):
     @param content    The text.
     @param value      The replace text, if the content is None.
     """ 
-    if content is None :
+    if content is None:
         return value
-    else :
+    else:
         return content
 
 
@@ -63,9 +63,9 @@ def __str_to_sql(content):
     @param content    The text.
     @param value      The replace text, if the content is None.
     """
-    if content is None :
+    if content is None:
         return "null"
-    else :
+    else:
         return "'{text}'".format(text = content)
 
 
@@ -75,10 +75,14 @@ def __list_to_sql(list):
     
     @param list    The list.
     """
-    if list is None :
+    if list is None:
         return "null"
-    else :
-        return "ARRAY" + str(list)
+    else:
+        list_str = ",".join(
+            "'" + __coalesce(column, "null") + "'"
+            for column in list)
+        list_str = "ARRAY[" + list_str + "]"
+        return list_str
 
 
 def __str_to_array(text, delimiter):
@@ -88,12 +92,10 @@ def __str_to_array(text, delimiter):
     @param text        The string which is separated by the delimiter.
     @param delimiter   The symbol that separates the text.    
     """
-    if text is None or text == "" :
+    if text is None or text == "":
         return None
-    
     array = str(text).lower().strip().split(delimiter)
-
-    if len(array) == 0 :
+    if len(array) == 0:
         return None
     
     return [item.strip() for item in array]
@@ -109,25 +111,23 @@ def __column_exists(madlib_schema, full_table_name, column_name):
     """
     __assert(
         full_table_name is not None and column_name is not None,
-        "the table name and column name must not be null"
-    )
+        "the table name and column name must not be null")
 
-    if __table_exists(madlib_schema, full_table_name) :
+    if __table_exists(madlib_schema, full_table_name):
         curstmt = """
-                  SELECT COUNT(*) AS count
-                  FROM pg_catalog.pg_attribute
-                  WHERE attnum > 0 AND
-                      (NOT attisdropped)           AND
-                      attname  = '{column_name}'   AND
-                      attrelid = '{full_table_name}'::regclass
-                  """.format(
-                      column_name = column_name,
-                      full_table_name = full_table_name
-                  )
+            SELECT COUNT(*) AS count
+            FROM pg_catalog.pg_attribute
+            WHERE attnum > 0 AND
+            (NOT attisdropped) AND
+            attname  = '{column_name}' AND
+            attrelid = '{full_table_name}'::regclass
+            """.format(
+                column_name = column_name,
+                full_table_name = full_table_name)
         t = plpy.execute(curstmt) 
         result = __get_query_value(t, "count")
-
         return result >= 1
+
     return False
 
 
@@ -140,16 +140,14 @@ def __table_exists(madlib_schema, validation_table_name):
     @param validation_table_name    The validated table name.   
     """
     t = plpy.execute(
-            """
-            SELECT {madlib_schema}.__table_exists
-            (
-                '{validation_table_name}'
-            ) AS existence
-            """.format(
-                madlib_schema = madlib_schema, 
-                validation_table_name = validation_table_name
-            )
-        )
+        """
+        SELECT {madlib_schema}.__table_exists
+        (
+            '{validation_table_name}'
+        ) AS existence
+        """.format(
+            madlib_schema = madlib_schema, 
+            validation_table_name = validation_table_name))
 
     return __get_query_value(t, "existence")    
     
@@ -164,14 +162,13 @@ def __strip_schema_name(full_table_name):
     """
     __assert(
         full_table_name is not None,
-        "table name should not be null"
-    )
+        "table name should not be null")
 
     str_val_array = full_table_name.split(".")
 
-    if len(str_val_array) == 1 :
+    if len(str_val_array) == 1:
         str_val = full_table_name
-    elif len(str_val_array) == 2 :
+    elif len(str_val_array) == 2:
         str_val = str_val_array[1]
 
     return str_val.lower()
@@ -184,7 +181,7 @@ def __assert(condition, reason):
     @param condition    The condition, a bool value.
     @param reason       The reason.
     """
-    if (not condition):
+    if not condition:
         plpy.error(reason)
 
 
@@ -202,34 +199,29 @@ def __assert_table(madlib_schema, full_table_name, existence):
         """.format(
             madlib_schema = madlib_schema,
             table_name = full_table_name,
-            exist = existence
-        )
-    )
+            exist = existence))
 
 
 def __columns_in_table(
     madlib_schema,
     column_names,
-    training_table_name
-):
+    training_table_name):
     """
     @brief Test if each element in the given array is a column of the table.
  
     @param column_names      The array containing the columns to be tested.
     @param table_name        The full table name.
- 
+
     @return True if each element of column_names is a column of the table.
     """
     t = plpy.execute(
-            """
-            SELECT {madlib_schema}.__columns_in_table(
-                {column_names},
-                '{training_table_name}'
-            ) AS existence
-            """.format(
-                madlib_schema = madlib_schema,
-                column_names = __list_to_sql(column_names),
-                training_table_name = training_table_name
-            )
-        )
+        """
+        SELECT {madlib_schema}.__columns_in_table(
+            {column_names},
+            '{training_table_name}'
+        ) AS existence
+        """.format(
+            madlib_schema = madlib_schema,
+            column_names = __list_to_sql(column_names),
+            training_table_name = training_table_name))
     return __get_query_value(t, "existence")

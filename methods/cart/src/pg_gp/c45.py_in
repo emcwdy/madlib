@@ -16,22 +16,21 @@ import dt_preproc as preproc
 import dt
 
 def c45_train(
-    madlib_schema,
-    split_criterion,    
-    training_table_name,
-    result_tree_table_name,
-    validation_table_name,
-    continuous_feature_names,
-    feature_col_names,
-    id_col_name,
-    class_col_name,
-    confidence_level,
-    how2handle_missing_value,
-    max_tree_depth,
-    node_prune_threshold,
-    node_split_threshold,
-    verbosity
-):
+        madlib_schema,
+        split_criterion,    
+        training_table_name,
+        result_tree_table_name,
+        validation_table_name,
+        continuous_feature_names,
+        feature_col_names,
+        id_col_name,
+        class_col_name,
+        confidence_level,
+        how2handle_missing_value,
+        max_tree_depth,
+        node_prune_threshold,
+        node_split_threshold,
+        verbosity):
     """
     @brief This is the long form API of training tree with all specified 
            parameters.
@@ -79,11 +78,11 @@ def c45_train(
     @param node_prune_threshold      The minimum percentage of the number of 
                                      records required in a child node. It can't
                                      be NULL. The range of it is in [0.0, 1.0].
-                                     This threshold only applies to the non-root
-                                     nodes. Therefore, if its value is 1, then
-                                     the trained tree only has one node (the
-                                     root node); if its value is 0, then no 
-                                     nodes will be pruned by this parameter.
+                                     This threshold only applies to the 
+                                     non-root nodes. Therefore, if its value is
+                                     1, then the trained tree only has one node
+                                     (the root node); if its value is 0, then 
+                                     no nodes will be pruned by this parameter.
     @param node_split_threshold      The minimum percentage of the number of 
                                      records required in a node in order for a
                                      further split to be possible.
@@ -99,26 +98,21 @@ def c45_train(
 
     @return An c45_train_result object.
     """
-    class ret : pass
-   
+    class ret:pass
     begin_func_exec = datetime.datetime.now()
-
-    if verbosity < 1 :
+    if verbosity < 1:
         # get rid of the messages whose severity level is lower than 'WARNING'
         plpy.execute("SET client_min_messages = WARNING")
-
     util.__assert(
         confidence_level is not None and 
-        confidence_level >= 0.001    and 
+        confidence_level >= 0.001 and 
         confidence_level <= 100,
-        "confidence level value must be in range from 0.001 to 100"
-    )
+        "confidence level value must be in range from 0.001 to 100")
     util.__assert(
         validation_table_name is None or
         util.__table_exists(madlib_schema, validation_table_name),
-        "the specified validation table<" + \
-        str(validation_table_name) + "> does not exist" 
-    )
+        ("the specified validation table<" + 
+         str(validation_table_name) + "> does not exist"))
 
     tree_table_name = result_tree_table_name.lower().strip()
 
@@ -136,39 +130,36 @@ def c45_train(
         node_prune_threshold,
         node_split_threshold,
         verbosity,
-        'tree'
-    )
+        'tree')
     plpy.info(tree_table_name)
     
     train_rs = dt.__encode_and_train(
-                   madlib_schema,
-                   'C4.5',
-                   split_criterion,
-                   1,
-                   None,
-                   training_table_name,
-                   validation_table_name,
-                   tree_table_name,
-                   continuous_feature_names,
-                   feature_col_names,
-                   id_col_name,
-                   class_col_name,
-                   confidence_level,
-                   how2handle_missing_value,
-                   max_tree_depth,
-                   1.0,
-                   False,
-                   node_prune_threshold,
-                   node_split_threshold,
-                   '<tree_schema_name>_<tree_table_name>',
-                   verbosity
-               )  
+        madlib_schema,
+        'C4.5',
+        split_criterion,
+        1,
+        None,
+        training_table_name,
+        validation_table_name,
+        tree_table_name,
+        continuous_feature_names,
+        feature_col_names,
+        id_col_name,
+        class_col_name,
+        confidence_level,
+        how2handle_missing_value,
+        max_tree_depth,
+        1.0,
+        False,
+        node_prune_threshold,
+        node_split_threshold,
+        '<tree_schema_name>_<tree_table_name>',
+        verbosity)  
 
-    if verbosity > 0 :
+    if verbosity > 0:
         plpy.info(
-            "Training Total Time: " + \
-            str(datetime.datetime.now() - begin_func_exec)
-        )
+            ("Training Total Time: " + 
+             str(datetime.datetime.now() - begin_func_exec)))
         plpy.info("Training result: " + str(train_rs))
     
     ret.training_set_size = train_rs.num_of_samples
@@ -191,22 +182,21 @@ def c45_genrule(madlib_schema, tree_table_name, verbosity = 0):
     @return The rule representation text for a decision tree.
     """
     union_stmt = None
-    if verbosity < 1 :
+    if verbosity < 1:
         # get rid of the messages whose severity level is lower than 'WARNING'
         plpy.execute("client_min_messages = WARNING;")
 
     util.__assert(
         tree_table_name is not None and 
         util.__table_exists(madlib_schema, tree_table_name),
-        "the specified tree table " + str(tree_table_name) + " does not exists"
-    )
+        ("the specified tree table " + str(tree_table_name) + 
+         " does not exists"))
 
     util.__assert(
         verbosity is not None,
-        "verbosity must be non-null"           
-    )
+        "verbosity must be non-null")
 
-    if verbosity > 0 :
+    if verbosity > 0:
         exec_begin = datetime.datetime.now()
         exec_leaves_rule = exec_begin - exec_begin
         exec_union = exec_leaves_rule
@@ -215,95 +205,86 @@ def c45_genrule(madlib_schema, tree_table_name, verbosity = 0):
     # get metatable and classtable name given the tree table name
     metatable_name = dt.__get_metatable_name(madlib_schema, tree_table_name)
     classtable_name = preproc.__get_classtable_name(
-                          madlib_schema,
-                          metatable_name
-                      )
+        madlib_schema,
+        metatable_name)
     class_column_name = preproc.__get_class_column_name(
-                            madlib_schema,
-                            metatable_name
-                        )
+        madlib_schema,
+        metatable_name)
 
     curstmt = """
-              SELECT id, maxclass, probability,
-                  sample_size, lmc_nid, lmc_fval
-              FROM {tree_table_name}
-              WHERE id = 1
-              """.format(tree_table_name = tree_table_name)
-
+        SELECT id, maxclass, probability,
+               sample_size, lmc_nid, lmc_fval
+        FROM {tree_table_name}
+        WHERE id = 1
+        """.format(tree_table_name = tree_table_name)
     t = plpy.execute(curstmt)
     rec = util.__get_query_record(t) # rec is a record t[0]
 
     # in sample the root node is leaf
-    if rec["lmc_nid"] is None :
+    if rec["lmc_nid"] is None:
         res = "All instances will be classified to class " + \
               "{class_value}[{size}/{sample_size}]".format(
                   class_value = preproc.__get_class_value(
-                                    madlib_schema, 
-                                    rec["maxclass"],
-                                    metatable_name
-                                ),
+                      madlib_schema, 
+                      rec["maxclass"],
+                      metatable_name),
                   size = int(rec["probability"] * rec["sample_size"]),
-                  sample_size = rec["sample_size"]
-              ) 
+                  sample_size = rec["sample_size"]) 
         return [res]
 
     # get the meta info for features in the tree table (as best split)
     curstmt = """
-              SELECT id, column_name,
-                  {madlib_schema}.__regclass_to_text(table_oid) 
-                  AS table_name,
-                  is_cont
-              FROM {metatable_name} n1
-              WHERE id IN
-              (
-                  SELECT DISTINCT feature
-                  FROM {tree_table_name}
-                  WHERE lmc_nid IS NOT NULL
-              )
-              """.format (
-                  madlib_schema = madlib_schema,
-                  metatable_name = metatable_name,
-                  tree_table_name = tree_table_name
-              )      
+        SELECT id, column_name,
+               {madlib_schema}.__regclass_to_text(table_oid) AS table_name,
+               is_cont
+        FROM {metatable_name} n1
+        WHERE id IN
+        (
+            SELECT DISTINCT feature
+            FROM {tree_table_name}
+            WHERE lmc_nid IS NOT NULL
+        )
+        """.format(
+            madlib_schema = madlib_schema,
+            metatable_name = metatable_name,
+            tree_table_name = tree_table_name)      
     t = plpy.execute(curstmt)
 
     # put all the features' value together using 'union all'
-    for rec in t :
+    for rec in t:
         # continuous feature will produce two rows
-        if rec["is_cont"] :
+        if rec["is_cont"]:
             fvalue_stmt = """
-                          SELECT {id} as fid, 1 as key,
-                              '{column_name} <= '::TEXT as fname, 
-                              null::text as fval
-                          UNION ALL
-                          SELECT id as fid, 2 as key, 
-                              '{column_name} > '::TEXT AS fname, 
-                              null::text as fval
-                          """.format (
-                              id = rec["id"],
-                              column_name = rec["column_name"]
-                          )
-        else :
+                SELECT {id} as fid, 1 as key,
+                       '{column_name} <= '::TEXT as fname, 
+                       null::text as fval
+                UNION ALL
+                SELECT id as fid, 2 as key, 
+                       '{column_name} > '::TEXT AS fname, 
+                       null::text as fval
+            """.format(
+                id = rec["id"],
+                column_name = rec["column_name"])
+        else:
             # discrete feature will produce the number of rows
             # which is the same with distinct values
             fvalue_stmt = """
-                          SELECT {id} as fid, key, 
-                              '{column_name} = '::TEXT as fname,
-                              {madlib_schema}.__to_char(column_name) as fval
-                          FROM {table_name}
-                          WHERE key IS NOT NULL
-                          """.format (
-                              id = rec["id"],
-                              column_name = rec["column_name"],
-                              table_name = rec["table_name"],
-                              madlib_schema = madlib_schema
-                          )
-        if union_stmt is None :
+                SELECT {id} as fid, key, 
+                       '{column_name} = '::TEXT as fname,
+                       {madlib_schema}.__to_char(column_name) as fval
+                FROM {table_name}
+                WHERE key IS NOT NULL
+                """.format(
+                    id = rec["id"],
+                    column_name = rec["column_name"],
+                    table_name = rec["table_name"],
+                    madlib_schema = madlib_schema)
+        if union_stmt is None:
             union_stmt = fvalue_stmt
-        else :
+        else:
             union_stmt = str(union_stmt) + " UNION ALL " + str(fvalue_stmt)
 
-    if verbosity > 0 :
+    if verbosity > 0:
         exec_union = datetime.datetime.now() - exec_begin
         plpy.info("compose feature values statement time: " + str(exec_union))
         plpy.info("feature info stmt: " + str(curstmt))
@@ -313,115 +294,106 @@ def c45_genrule(madlib_schema, tree_table_name, verbosity = 0):
     plpy.execute("DROP TABLE IF EXISTS c45_gen_rules_leaves")
 
     curstmt = """
-              CREATE TEMP TABLE c45_gen_rules_leaves as
-              SELECT
-                  id,
-                  ' then class ' ||
-                  class::TEXT ||
-                  ' [' ||
-                  (probability * sample_size)::BIGINT |
-                  '/' ||
-                  sample_size ||
-                  ']'
-                  as str,
-                  array_to_string(tree_location, ''') as location,
-                  1 as rlid
-              FROM
-              (
-                  SELECT id, maxclass, tree_location, probability, sample_size
-                  FROM {tree_table_name}
-                  WHERE lmc_nid IS NULL
-              ) n1
-              LEFT JOIN
-              (
-                  SELECT {class_column_name} as class, key
-                  FROM {classtable_name}
-                  WHERE key IS NOT NULL
-              ) n2
-              ON n1.maxclass = n2.key
-              m4_ifdef(`__GREENPLUM__', `DISTRIBUTED BY (location)')
-              """.format (
-                  tree_table_name = tree_table_name,
-                  class_column_name = class_column_name,
-                  classtable_name = classtable_name
-              )
+        CREATE TEMP TABLE c45_gen_rules_leaves as
+        SELECT id,
+               ' then class ' ||
+               class::TEXT ||
+               ' [' ||
+               (probability * sample_size)::BIGINT |
+               '/' ||
+               sample_size ||
+               ']'
+               as str,
+               array_to_string(tree_location, ''') as location,
+               1 as rlid
+        FROM
+        (
+            SELECT id, maxclass, tree_location, probability, sample_size
+            FROM {tree_table_name}
+            WHERE lmc_nid IS NULL
+        ) n1
+        LEFT JOIN
+        (
+            SELECT {class_column_name} as class, key
+            FROM {classtable_name}
+            WHERE key IS NOT NULL
+        ) n2
+        ON n1.maxclass = n2.key
+        m4_ifdef(`__GREENPLUM__', `DISTRIBUTED BY (location)')
+        """.format(
+            tree_table_name = tree_table_name,
+            class_column_name = class_column_name,
+            classtable_name = classtable_name)
     plpy.execute(curstmt)
 
-    if verbosity > 0 :
+    if verbosity > 0:
         exec_leaves_rule = datetime.datetime.now() - exec_begin
         plpy.info(
             "create table for leaves' rules time: " + \
-            str(exec_leaves_rule - exec_union)
-        )
+            str(exec_leaves_rule - exec_union))
         plpy.info("create table for leaves stmt: " + str(curstmt))
-
     plpy.execute("DROP TABLE IF EXISTS c45_gen_rules_internode")
 
     # put rules of the internal nodes into a table
     curstmt = """
-              CREATE TEMP TABLE c45_gen_rules_internode AS
-              SELECT
-                  lmc_nid + (key - lmc_fval) AS id,
-                  CASE WHEN (id = 1) THEN
-                      ' if ' ||
-                      fname ||
-                      COALESCE(split_value::TEXT,
-                      {madlib_schema}.__to_char(fval), 'NULL')
-                  ELSE
-                      '    ' ||
-                      fname ||
-                      COALESCE(split_value::TEXT,
-                      {madlib_schema}.__to_char(fval), 'NULL')
-                  END AS str,
-              array_to_string(tree_location, ''') || key AS location,
-                  0 AS rlid
-              FROM
-              (
-                  SELECT id, feature, tree_location,
-                      lmc_nid, lmc_fval, split_value
-                  FROM {tree_table_name}
-                  WHERE lmc_nid IS NOT NULL
-              ) n1
-              LEFT JOIN ({union_stmt}) n2
-              ON n1.feature = n2.fid
-              WHERE
-              (lmc_nid + key - lmc_fval) IN (SELECT id from {tree_table_name})
-              m4_ifdef(`GREENPLUM', `DISTRIBUTED BY (location)')
-              """.format (
-                  madlib_schema = madlib_schema,
-                  tree_table_name = tree_table_name,
-                  union_sttm = union_stmt
-              )
+        CREATE TEMP TABLE c45_gen_rules_internode AS
+        SELECT
+               lmc_nid + (key - lmc_fval) AS id,
+               CASE WHEN (id = 1) THEN
+                        ' if ' ||
+                        fname ||
+                        COALESCE(split_value::TEXT,
+                        {madlib_schema}.__to_char(fval), 'NULL')
+                    ELSE
+                        '    ' ||
+                        fname ||
+                        COALESCE(split_value::TEXT,
+                        {madlib_schema}.__to_char(fval), 'NULL')
+                END AS str,
+                array_to_string(tree_location, ''') || key AS location,
+                0 AS rlid
+        FROM
+        (
+            SELECT id, feature, tree_location, lmc_nid, lmc_fval, split_value
+            FROM {tree_table_name}
+            WHERE lmc_nid IS NOT NULL
+        ) n1
+        LEFT JOIN ({union_stmt}) n2
+        ON n1.feature = n2.fid
+        WHERE
+        (lmc_nid + key - lmc_fval) IN (SELECT id from {tree_table_name})
+        m4_ifdef(`GREENPLUM', `DISTRIBUTED BY (location)')
+        """.format(
+            madlib_schema = madlib_schema,
+            tree_table_name = tree_table_name,
+            union_sttm = union_stmt)
     plpy.execute(curstmt)
 
-    if verbosity > 0 :
+    if verbosity > 0:
         exec_internode_rule = datetime.datetime.now() - exec_begin
         plpy.info(
             "create table for internal nodes' rules time: " + \
-            str(exec_internode_rule - exec_leaves_rule)
-        )
+            str(exec_internode_rule - exec_leaves_rule))
         plpy.info("create table for internal nodes stmt: " + str(curstmt))
 
     t = plpy.execute(
-            """
-            SELECT t1.id, t1.rlid, t2.location, t1.str
-            FROM
-            c45_gen_rules_internode t1
-            LEFT JOIN c45_gen_rules_leaves t2
-            ON position(t1.location in t2.location) = 1
-            UNION ALL
-            SELECT id, rlid, location, str
-            FROM c45_gen_rules_leaves n
-            ORDER BY location, rlid, id
-            """
-        )
+        """
+        SELECT t1.id, t1.rlid, t2.location, t1.str
+        FROM
+        c45_gen_rules_internode t1
+        LEFT JOIN c45_gen_rules_leaves t2
+        ON position(t1.location in t2.location) = 1
+        UNION ALL
+        SELECT id, rlid, location, str
+        FROM c45_gen_rules_leaves n
+        ORDER BY location, rlid, id
+        """)
     result = [rec["str"] for rec in t]
 
-    if verbosity > 0 :
+    if verbosity > 0:
         plpy.info(
             "Total rules generation time: " + \
-            str(datetime.datetime.now() - exec_begin)
-        )
+            str(datetime.datetime.now() - exec_begin))
 
     return result
 
@@ -439,40 +411,35 @@ def c45_display(madlib_schema, tree_table, max_depth = None):
     tids = [1]
     # get rid of the messages whose severity level is lower than 'WARNING'
     plpy.execute("SET client_min_messages = WARNING")
-
     util.__assert(
         tree_table is not None and
         util.__table_exists(madlib_schema, tree_table),
-        "the specified tree table <" + str(tree_table) + "> does not exists"
-    )
+        "the specified tree table <" + str(tree_table) + "> does not exists")
 
 m4_changequote(`>>>', `<<<')
 m4_ifdef(>>>__HAS_ORDERED_AGGREGATES__<<<, >>>
     res = dt.__treemodel_display_with_ordered_aggr(
-              madlib_schema, 
-              tree_table,
-              tids, 
-              max_depth
-          )
+        madlib_schema, 
+        tree_table,
+        tids, 
+        max_depth)
 <<<, >>>
     res = dt.__treemodel_display_no_ordered_aggr(
-              madlib_schema, 
-              tree_table, 
-              tids,
-              max_depth
-          )
+        madlib_schema, 
+        tree_table, 
+        tids,
+        max_depth)
 <<<)
 m4_changequote(>>>`<<<, >>>'<<<)
     return res
 
 
 def c45_classify(
-    madlib_schema,
-    tree_table_name,
-    classification_table_name,
-    result_table_name,
-    verbosity = 0
-):
+        madlib_schema,
+        tree_table_name,
+        classification_table_name,
+        result_table_name,
+        verbosity = 0):
     """
     @brief Classify dataset using trained decision tree model.
     The classification result will be stored in the table which is defined
@@ -493,28 +460,24 @@ def c45_classify(
 
     @return A c45_classify_result object.
     """
-    class ret : pass
+    class ret:pass
     table_names = []
     encoded_table_name = ""
-    temp_result_table =""
+    temp_result_table = ""
 
-    if verbosity < 1 :
+    if verbosity < 1:
         plpy.execute("SET client_min_messages = WARNING")
-
     begin_time = datetime.datetime.now()
-
     util.__assert(
         result_table_name is not None and 
         not util.__table_exists(madlib_schema, result_table_name),
-        "the specified result table <" + str(result_table_name) + "> exists"
-    )
+        "the specified result table <" + str(result_table_name) + "> exists")
 
-    table_names = dt.__treemodel_classify_internal (
-                      madlib_schema,
-                      classification_table_name,
-                      tree_table_name,
-                      verbosity
-                  )
+    table_names = dt.__treemodel_classify_internal(
+        madlib_schema,
+        classification_table_name,
+        tree_table_name,
+        verbosity)
 
     encoded_table_name = table_names[0]
     temp_result_table = table_names[1]
@@ -523,50 +486,45 @@ def c45_classify(
     metatable_name = dt.__get_metatable_name(madlib_schema, tree_table_name)
 
     curstmt = """
-              SELECT column_name,
-                  {madlib_schema}.__regclass_to_text(table_oid) AS table_name
-              FROM {metatable_name}
-              WHERE column_type = 'c' LIMIT 1
-              """.format(
-                  madlib_schema = madlib_schema,
-                  metatable_name = metatable_name
-              )
+        SELECT column_name,
+        {madlib_schema}.__regclass_to_text(table_oid) AS table_name
+        FROM {metatable_name}
+        WHERE column_type = 'c' LIMIT 1
+        """.format(
+            madlib_schema = madlib_schema,
+            metatable_name = metatable_name)
     t = plpy.execute(curstmt)
     result_rec = util.__get_query_record(t)
 
     # translate the encoded class information back
     curstmt = """
-              CREATE TABLE {result_table_name} 
-              AS SELECT n.id, m.fval as class, n.prob
-              FROM {temp_result_table} n, {table_name} m
-              WHERE n.class = m.code
-              m4_ifdef(`__GREENPLUM__', `DISTRIBUTED BY (id)')
-              """.format (
-                  result_table_name = result_table_name,
-                  temp_result_table = temp_result_table,
-                  table_name = result_rec["table_name"]
-              )
+        CREATE TABLE {result_table_name} 
+        AS SELECT n.id, m.fval as class, n.prob
+        FROM {temp_result_table} n, {table_name} m
+        WHERE n.class = m.code
+        m4_ifdef(`__GREENPLUM__', `DISTRIBUTED BY (id)')
+        """.format(
+            result_table_name = result_table_name,
+            temp_result_table = temp_result_table,
+            table_name = result_rec["table_name"])
     plpy.execute(curstmt)
 
     plpy.execute("DROP TABLE IF EXISTS " + str(encoded_table_name))
     plpy.execute("DROP TABLE IF EXISTS " + str(temp_result_table))
-    
     t = plpy.execute(
-            "SELECT COUNT(*) AS count FROM  " + \
-            str(classification_table_name)
-        )
+        "SELECT COUNT(*) AS count FROM  " + \
+        str(classification_table_name))
     ret.input_set_size = util.__get_query_value(t, "count")
     ret.classification_time = datetime.datetime.now() - begin_time
     
     return ret
 
 
-def c45_score (
-    madlib_schema               ,
-    tree_table_name             ,
-    scoring_table_name          ,
-    verbosity = 0        
-):
+def c45_score(
+        madlib_schema,
+        tree_table_name,
+        scoring_table_name,
+        verbosity = 0):
     """
     @brief Check the accuracy of the decision tree model.
  
@@ -576,17 +534,16 @@ def c45_score (
 
     @return The estimated accuracy information.
     """
-    accuracy = dt.__treemodel_score (
-                   madlib_schema,
-                   tree_table_name,
-                   scoring_table_name,
-                   verbosity
-               )
+    accuracy = dt.__treemodel_score(
+        madlib_schema,
+        tree_table_name,
+        scoring_table_name,
+        verbosity)
     
     return accuracy
 
 
-def c45_clean (madlib_schema, result_tree_table_name):
+def c45_clean(madlib_schema, result_tree_table_name):
     """
     @brief Cleanup the trained tree table and any relevant tables.
 

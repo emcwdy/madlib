@@ -19,29 +19,27 @@ def __delete_traininginfo(madlib_schema, tree_table):
     @param tree_table    The full name of the tree table.
     """
     stmt = """
-           DELETE FROM {madlib_schema}.training_info
-           WHERE result_table_oid = '{tree_table}'::regclass;
-           """.format(
-               madlib_schema = madlib_schema,
-               tree_table = tree_table
-           )
+        DELETE FROM {madlib_schema}.training_info
+        WHERE result_table_oid = '{tree_table}'::regclass;
+        """.format(
+            madlib_schema = madlib_schema,
+            tree_table = tree_table)
     plpy.execute(stmt)
 
 
 def __insert_into_traininginfo(
-    madlib_schema               ,
-    classifier_table_name       ,
-    result_table_name           ,
-    training_table_name         ,
-    training_metatable_name     ,
-    training_encoded_table_name ,
-    validation_table_name       ,
-    how2handle_missing_value    ,
-    split_criterion             ,
-    sampling_percentage         ,
-    num_features_chosen         ,
-    num_trees                   
-):
+        madlib_schema,
+        classifier_table_name,
+        result_table_name,
+        training_table_name,
+        training_metatable_name,
+        training_encoded_table_name,
+        validation_table_name,
+        how2handle_missing_value,
+        split_criterion,
+        sampling_percentage,
+        num_features_chosen,
+        num_trees):
  
     """
     @brief Insert the trained tree into training info table.
@@ -62,41 +60,40 @@ def __insert_into_traininginfo(
                                          each tree node.
     @param num_trees                     The number of trees after completed.
     """
-    if validation_table_name is None :
+    if validation_table_name is None:
         val_tbl_name_sql = "NULL::regclass,"
-    else :
+    else:
         val_tbl_name_sql = "'{validation_table_name}'::regclass,".format(
-                                validation_table_name = validation_table_name
-                           )
+            validation_table_name = validation_table_name)
     
     stmt = """
-           INSERT INTO {madlib_schema}.training_info VALUES (
-               '{classifier_table_name}',
-               '{result_table_name}'::regclass,
-               '{training_table_name}'::regclass,
-               '{training_metatable_name}'::regclass,
-               '{training_encoded_table_name}'::regclass,
-               {val_tbl_name_sql}
-               '{how2handle_missing_value}',
-               '{split_criterion}',
-               {sampling_percentage}, 
-               {num_features_chosen},
-               {num_trees}
-           )
-           """.format (
-               madlib_schema = madlib_schema,
-               classifier_table_name = classifier_table_name,
-               result_table_name = result_table_name,
-               training_table_name = training_table_name,
-               training_metatable_name = training_metatable_name,
-               training_encoded_table_name = training_encoded_table_name,
-               val_tbl_name_sql = val_tbl_name_sql,
-               how2handle_missing_value = how2handle_missing_value,
-               split_criterion = split_criterion,
-               sampling_percentage = sampling_percentage,
-               num_features_chosen = num_features_chosen,
-               num_trees = num_trees
-           )
+        INSERT INTO {madlib_schema}.training_info VALUES
+        (
+            '{classifier_table_name}',
+            '{result_table_name}'::regclass,
+            '{training_table_name}'::regclass,
+            '{training_metatable_name}'::regclass,
+            '{training_encoded_table_name}'::regclass,
+            {val_tbl_name_sql}
+            '{how2handle_missing_value}',
+            '{split_criterion}',
+            {sampling_percentage}, 
+            {num_features_chosen},
+            {num_trees}
+        )
+        """.format(
+            madlib_schema = madlib_schema,
+            classifier_table_name = classifier_table_name,
+            result_table_name = result_table_name,
+            training_table_name = training_table_name,
+            training_metatable_name = training_metatable_name,
+            training_encoded_table_name = training_encoded_table_name,
+            val_tbl_name_sql = val_tbl_name_sql,
+            how2handle_missing_value = how2handle_missing_value,
+            split_criterion = split_criterion,
+            sampling_percentage = sampling_percentage,
+            num_features_chosen = num_features_chosen,
+            num_trees = num_trees)
     plpy.execute(stmt)
    
 
@@ -109,18 +106,16 @@ def __get_encode_table_name(madlib_schema, tree_table):
     @return The full name of the encoded table.
     """
     stmt = """
-           SELECT {madlib_schema}.__regclass_to_text
-           (
-               training_encoded_table_oid
-           ) AS encode_table_name
-           FROM {madlib_schema}.training_info
-           WHERE result_table_oid = '{tree_table}'::regclass
-           """.format(
-               madlib_schema = madlib_schema,
-               tree_table = tree_table
-           ) 
+        SELECT {madlib_schema}.__regclass_to_text
+        (
+            training_encoded_table_oid
+        ) AS encode_table_name
+        FROM {madlib_schema}.training_info
+        WHERE result_table_oid = '{tree_table}'::regclass
+        """.format(
+            madlib_schema = madlib_schema,
+            tree_table = tree_table) 
     encoded_table_name_t = plpy.execute(stmt)
-    
     return util.__get_query_value(encoded_table_name_t, "encode_table_name")
 
 
@@ -144,33 +139,31 @@ def __is_valid_enc_table(madlib_schema, enc_tbl_name):
     
     # test if the table is in the training_info table
     stmt = """
-           SELECT count(*) AS count
-           FROM {madlib_schema}.training_info
-           WHERE {madlib_schema}.__regclass_to_text
-                     (training_encoded_table_oid) = '{enc_tbl_name}'
-           """.format(
-               madlib_schema = madlib_schema, 
-               enc_tbl_name = enc_tbl_name
-           )
-
+        SELECT count(*) AS count
+        FROM {madlib_schema}.training_info
+        WHERE {madlib_schema}.__regclass_to_text
+        (training_encoded_table_oid) = '{enc_tbl_name}'
+        """.format(
+            madlib_schema = madlib_schema, 
+            enc_tbl_name = enc_tbl_name)
     t = plpy.execute(stmt)
     num_enc_table = util.__get_query_value(t, "count")
 
     # test if the name and the type of a column are valid or not
     stmt = """
-           SELECT count(*) AS count
-           FROM pg_attribute
-           WHERE attrelid= '{enc_tbl_name}'::regclass::oid AND
-                 attnum > 0 AND
-                 not attisdropped AND
-                 attname in ('id', 'fid', 'fval', 'is_cont', 'class') AND
-                 atttypid in ('int8'::regtype, 'int'::regtype, 
-                     'float8'::regtype, 'bool'::regtype, 'int'::regtype)
-           """.format(enc_tbl_name = enc_tbl_name)
+        SELECT count(*) AS count
+        FROM pg_attribute
+        WHERE attrelid= '{enc_tbl_name}'::regclass::oid AND
+              attnum > 0 AND
+              not attisdropped AND
+              attname in ('id', 'fid', 'fval', 'is_cont', 'class') AND
+              atttypid in ('int8'::regtype, 'int'::regtype, 
+              'float8'::regtype, 'bool'::regtype, 'int'::regtype)
+        """.format(enc_tbl_name = enc_tbl_name)
     t = plpy.execute(stmt)
     num_cols = util.__get_query_value(t, "count")
 
-    if (num_enc_table > 0) and (num_cols == 5) :
+    if (num_enc_table > 0) and (num_cols == 5):
         ret = True
 
     return ret
@@ -188,18 +181,16 @@ def __get_metatable_name(madlib_schema, tree_table):
     
     util.__assert_table(
         madlib_schema, 
-        str(madlib_schema) + ".training_info", True
-    )
+        str(madlib_schema) + ".training_info", True)
 
     stmt = """
-           SELECT {madlib_schema}.__regclass_to_text
-               (training_metatable_oid) AS metatable_name
-           FROM {madlib_schema}.training_info
-           WHERE result_table_oid = '{tree_table}'::regclass
-           """.format(
-               madlib_schema = madlib_schema,
-               tree_table = tree_table
-           )
+        SELECT {madlib_schema}.__regclass_to_text
+        (training_metatable_oid) AS metatable_name
+        FROM {madlib_schema}.training_info
+        WHERE result_table_oid = '{tree_table}'::regclass
+        """.format(
+            madlib_schema = madlib_schema,
+            tree_table = tree_table)
     metatable_name_t = plpy.execute(stmt)
 
     return util.__get_query_value(metatable_name_t, "metatable_name")
@@ -215,9 +206,9 @@ def __get_routine_id(madlib_schema, tree_table):
     """
     name = __get_routine_name(madlib_schema, tree_table)
     
-    if name == "ignore" :
+    if name == "ignore":
         return 1
-    elif name == "explicit" :
+    elif name == "explicit":
         return 2
     else:
         plpy.error("__get_routine_id:" + name)
@@ -235,19 +226,16 @@ def __get_routine_name(madlib_schema, tree_table):
     util.__assert_table(
         madlib_schema,
         madlib_schema + ".training_info",
-        True
-    )
+        True)
 
     stmt = """
-           SELECT how2handle_missing_value AS name
-           FROM   {madlib_schema}.training_info
-           WHERE  result_table_oid = '{tree_table}'::regclass
-           """.format(
-               madlib_schema = madlib_schema,
-               tree_table = tree_table
-           )
+        SELECT how2handle_missing_value AS name
+        FROM {madlib_schema}.training_info
+        WHERE result_table_oid = '{tree_table}'::regclass
+        """.format(
+            madlib_schema = madlib_schema,
+            tree_table = tree_table)
     name_t = plpy.execute(stmt)
- 
     return util.__get_query_value(name_t, "name")
 
 
@@ -260,29 +248,25 @@ def __get_tree_table_name(madlib_schema, enc_table_name):
     @return The full name of the tree table.
     """ 
     curstmt = """
-              SELECT {madlib_schema}.__regclass_to_text
-                  (result_table_oid::regclass) AS name
-              FROM {madlib_schema}.training_info
-              WHERE training_encoded_table_oid = 
-                  '{enc_table_name}'::regclass
-              LIMIT 1
-              """.format(
-                  enc_table_name = enc_table_name, 
-                  madlib_schema = madlib_schema
-              )  
+        SELECT {madlib_schema}.__regclass_to_text
+        (result_table_oid::regclass) AS name
+        FROM {madlib_schema}.training_info
+        WHERE training_encoded_table_oid = '{enc_table_name}'::regclass
+        LIMIT 1
+        """.format(
+            enc_table_name = enc_table_name, 
+            madlib_schema = madlib_schema)  
     t = plpy.execute(curstmt)
-    
     return util.__get_query_value(t, "name")
 
 
-def __get_features_of_nodes (
-    madlib_schema         ,
-    nid_table_name        ,
-    result_table_name     ,
-    num_chosen_fids       ,
-    total_num_fids        ,
-    verbosity             
-):
+def __get_features_of_nodes(
+        madlib_schema,
+        nid_table_name,
+        result_table_name,
+        num_chosen_fids,
+        total_num_fids,
+        verbosity):
     """
     @brief Retrieve the selected features for a node. We will create a table,
            named sf_association, to store the association between selected 
@@ -314,37 +298,34 @@ def __get_features_of_nodes (
     plpy.execute("TRUNCATE sf_assoc")
 
     curstmt = """
-              INSERT INTO sf_assoc(nid, fid)
-              SELECT
-                  nid,
-                  unnest
-                  (
-                      {madlib_schema}.__dt_get_node_split_fids
-                      (
-                          {num_chosen_fids},
-                          {total_num_fids},
-                          nid,
-                          dp_ids
-                      )
-                  ) as fid
-              FROM
-              (
-                  SELECT nid, dp_ids
-                  FROM {nid_table_name} s1, {result_table_name} s2
-                  WHERE s1.nid = s2.id
-                  GROUP BY nid, dp_ids
-              ) t
-              """.format (
-                  madlib_schema = madlib_schema,
-                  num_chosen_fids = int(num_chosen_fids), #maybe numeric or float
-                  total_num_fids = total_num_fids,
-                  nid_table_name = nid_table_name,
-                  result_table_name = result_table_name
-              )
-   
+        INSERT INTO sf_assoc(nid, fid)
+        SELECT 
+               nid,
+               unnest
+               (
+                   {madlib_schema}.__dt_get_node_split_fids
+                   (
+                       {num_chosen_fids},
+                       {total_num_fids},
+                       nid,
+                       dp_ids
+                   )
+               ) as fid
+        FROM
+        (
+            SELECT nid, dp_ids
+            FROM {nid_table_name} s1, {result_table_name} s2
+            WHERE s1.nid = s2.id
+            GROUP BY nid, dp_ids
+        ) t
+        """.format (
+            madlib_schema = madlib_schema,
+            num_chosen_fids = int(num_chosen_fids), #maybe numeric or float
+            total_num_fids = total_num_fids,
+            nid_table_name = nid_table_name,
+            result_table_name = result_table_name)
     if verbosity > 0:
         plpy.info("build sample feature association stmt: " + curstmt)
-
     plpy.execute(curstmt)
 
     # we return an constant string for the association table name
@@ -352,17 +333,16 @@ def __get_features_of_nodes (
 
 
 def __gen_acc(
-    madlib_schema           ,
-    encoded_table_name      ,
-    metatable_name          ,
-    result_table_name       ,
-    tr_table_name           ,
-    sf_table_name           ,
-    num_featrue_try         ,
-    num_classes             ,
-    sampling_needed         ,
-    verbosity               
-):
+        madlib_schema,
+        encoded_table_name,
+        metatable_name,
+        result_table_name,
+        tr_table_name,
+        sf_table_name,
+        num_featrue_try,
+        num_classes,
+        sampling_needed,
+        verbosity):
     """
     @brief Generate the ACC for current leaf nodes.
 
@@ -385,11 +365,10 @@ def __gen_acc(
 
     # get the number of features
     curstmt = """
-              SELECT COUNT(id) AS count
-              FROM {metatable_name}
-              WHERE column_type = 'f'
-              """.format(metatable_name = metatable_name)
-    
+        SELECT COUNT(id) AS count
+        FROM {metatable_name}
+        WHERE column_type = 'f'
+        """.format(metatable_name = metatable_name)
     t = plpy.execute(curstmt)
     num_fids = util.__get_query_value(t, "count")
 
@@ -397,67 +376,60 @@ def __gen_acc(
     ret.calc_pre_time = datetime.datetime.now() - begin_calc_pre
     begin_calc_acc = datetime.datetime.now()
 
-    if sampling_needed :
-        __get_features_of_nodes (
+    if sampling_needed:
+        __get_features_of_nodes(
             madlib_schema,
             tr_table_name,
             result_table_name,
             num_featrue_try,
             num_fids,
-            verbosity
-        )
+            verbosity)
   
         select_stmt = """
-                      SELECT tr.tid, tr.nid, ed.fid, ed.fval, ed.is_cont,
-                          ed.class, sum(weight) as count
-                      FROM {encoded_table_name} ed, {tr_table_name} tr,
-                          {sf_table_name} sf
-                      WHERE tr.nid = sf.nid AND ed.fid = sf.fid AND 
-                          ed.id = tr.id
-                      GROUP BY tr.tid, tr.nid, ed.fid, ed.fval,
-                          ed.is_cont, ed.class
-                      """.format (
-                          encoded_table_name = encoded_table_name,
-                          tr_table_name = tr_table_name,
-                          sf_table_name = sf_table_name
-                      )                     
-    else :
+            SELECT tr.tid, tr.nid, ed.fid, ed.fval, ed.is_cont,
+                   ed.class, sum(weight) as count
+            FROM {encoded_table_name} ed, 
+                 {tr_table_name} tr,
+                 {sf_table_name} sf
+            WHERE tr.nid = sf.nid AND ed.fid = sf.fid AND 
+                  ed.id = tr.id
+            GROUP BY tr.tid, tr.nid, ed.fid, ed.fval, ed.is_cont, ed.class
+            """.format(
+                encoded_table_name = encoded_table_name,
+                tr_table_name = tr_table_name,
+                sf_table_name = sf_table_name)                     
+    else:
         select_stmt = """
-                      SELECT tr.tid, tr.nid, ed.fid, ed.fval, ed.is_cont,
-                          ed.class, sum(weight) as count
-                      FROM {encoded_table_name} ed, {tr_table_name} tr
-                      WHERE ed.id = tr.id
-                      GROUP BY tr.tid, tr.nid, ed.fid, ed.fval,
-                          ed.is_cont, ed.class
-                      """.format(
-                          encoded_table_name = encoded_table_name, 
-                          tr_table_name = tr_table_name
-                      )
+            SELECT tr.tid, tr.nid, ed.fid, ed.fval, ed.is_cont,
+                   ed.class, sum(weight) as count
+            FROM {encoded_table_name} ed, {tr_table_name} tr
+            WHERE ed.id = tr.id
+            GROUP BY tr.tid, tr.nid, ed.fid, ed.fval,
+                     ed.is_cont, ed.class
+            """.format(
+                encoded_table_name = encoded_table_name, 
+                tr_table_name = tr_table_name)
     
     plpy.execute("DROP TABLE IF EXISTS training_instance_aux;")
-
     curstmt = """
-              CREATE TEMP TABLE training_instance_aux AS
-              SELECT tid, nid, fid, fval, is_cont,
-                  {madlib_schema}.__dt_acc_count_aggr
-                  (
-                      {num_classes},count::BIGINT,class::INT
-                  ) AS count
-              FROM
-              (
-                  {select_stmt}
-              ) l
-              GROUP BY tid,nid,fid, fval,is_cont
-              m4_ifdef(`__GREENPLUM__', `DISTRIBUTED BY (fid, fval)')
-              """.format(
-                  num_classes = num_classes, 
-                  select_stmt = select_stmt,
-                  madlib_schema = madlib_schema
-              )
-
-    if verbosity > 0 :
+        CREATE TEMP TABLE training_instance_aux AS
+        SELECT tid, nid, fid, fval, is_cont,
+               {madlib_schema}.__dt_acc_count_aggr
+               (
+                   {num_classes},count::BIGINT,class::INT
+               ) AS count
+               FROM
+               (
+                   {select_stmt}
+               ) l
+        GROUP BY tid,nid,fid, fval,is_cont
+        m4_ifdef(`__GREENPLUM__', `DISTRIBUTED BY (fid, fval)')
+        """.format(
+            num_classes = num_classes, 
+            select_stmt = select_stmt,
+            madlib_schema = madlib_schema)
+    if verbosity > 0:
         plpy.info(curstmt)
-
     plpy.execute(curstmt)
     
     ret.calc_acc_time = datetime.datetime.now() - begin_calc_acc
@@ -466,16 +438,15 @@ def __gen_acc(
 
 
 def __find_best_split(
-    madlib_schema,
-    table_name,
-    confidence_level,
-    feature_table_name,
-    split_criterion,
-    continue_grow,
-    output_table,
-    h2hmv_routine_id,
-    num_classes
-):
+        madlib_schema,
+        table_name,
+        confidence_level,
+        feature_table_name,
+        split_criterion,
+        continue_grow,
+        output_table,
+        h2hmv_routine_id,
+        num_classes):
     """
     @brief This function find the best split and return the information.
 
@@ -501,35 +472,33 @@ def __find_best_split(
     begin_func_exec = datetime.datetime.now()
     select_stmt = ""
    
-    if h2hmv_routine_id == 1 :
+    if h2hmv_routine_id == 1:
         # For ignore, we need the true size of nodes to handle the missing 
         # values.
         select_stmt = """
-                      SELECT t1.tid, t1.nid, t1.fid, t1.total, 
-                          t2.node_size::BIGINT
-                      FROM
-                      (
-                          SELECT tid, nid, fid, 
-                              m4_ifdef(`__GREENPLUM__', `sum(count)',
-                                  `{madlib_schema}.__bigint_array_sum(count)') 
-                              AS total
-                          FROM training_instance_aux
-                          GROUP BY tid, nid, fid
-                      ) t1 INNER JOIN node_size_aux t2
-                      ON t1.tid=t2.tid AND t1.nid=t2.nid
-                      """.format(madlib_schema = madlib_schema)
-    else :
+            SELECT t1.tid, t1.nid, t1.fid, t1.total, 
+                   t2.node_size::BIGINT
+            FROM
+            (
+                SELECT tid, nid, fid, 
+                       m4_ifdef(`__GREENPLUM__', `sum(count)',
+                       `{madlib_schema}.__bigint_array_sum(count)') AS total
+                FROM training_instance_aux
+                GROUP BY tid, nid, fid
+            ) t1 INNER JOIN node_size_aux t2
+            ON t1.tid=t2.tid AND t1.nid=t2.nid
+            """.format(madlib_schema = madlib_schema)
+    else:
         # For explicit, the calculated node size from the aggregation is correct.
         # We can set NULL, which denotes we can safely use the counted value.
         select_stmt = """
-                      SELECT tid, nid, fid,
-                          m4_ifdef(`__GREENPLUM__', `sum(count)', 
-                              `{madlib_schema}.__bigint_array_sum(count)') 
-                          AS total,
-                           NULL::BIGINT AS node_size
-                      FROM training_instance_aux
-                      GROUP BY tid, nid, fid
-                      """.format(madlib_schema = madlib_schema)
+            SELECT tid, nid, fid,
+                   m4_ifdef(`__GREENPLUM__', `sum(count)', 
+                   `{madlib_schema}.__bigint_array_sum(count)') AS total,
+                   NULL::BIGINT AS node_size
+            FROM training_instance_aux 
+            GROUP BY tid, nid, fid
+            """.format(madlib_schema = madlib_schema)
       
     """   
     This table is used to store information for the calculated best split
@@ -546,12 +515,11 @@ def __find_best_split(
     is_cont              whether the selected feature is continuous.
     split_value          If the selected feature is continuous, it specifies
                          the split value. Otherwise, it is of no use.
-    distinct_features    The number of distinct values for the selected feature.
+    distinct_features    The number of distinct values for the selected 
+                         feature.
     node_size            The size of this tree node.
     """   
-
     plpy.execute("DROP TABLE IF EXISTS " + output_table)
-
     plpy.execute(
         """
         CREATE TEMP TABLE {output_table}
@@ -569,100 +537,90 @@ def __find_best_split(
             distinct_features   INT,
             node_size           INT
         ) m4_ifdef(`__GREENPLUM__', `DISTRIBUTED BY (node_id)');
-        """.format(output_table = output_table)
-    )
+        """.format(output_table = output_table))
 
     plpy.execute("DROP TABLE IF EXISTS tmp_best_table")
-
     curstmt = """
-              INSERT INTO {output_table}
-              SELECT tid, nid, best_scv[6], best_scv[4], best_scv[3],
-                  best_scv[1],
-                  CASE WHEN (best_scv[1] < 1e-9   OR
-                      best_scv[4] > 1-1e-9 OR {continue_grow} <= 0 ) THEN
-                      0
-                  ELSE
-                      1
-                  END AS live,
-                  {madlib_schema}.__ebp_calc_errors
-                  (
-                      best_scv[5], 
-                      best_scv[4], 
-                      {confidence_level}
-                  ) AS ebp_coeff,
-                  o2.is_cont,
-                  CASE WHEN( o2.is_cont ) THEN
-                      best_scv[7]
-                  ELSE
-                      NULL
-                  END AS split_value,
-                  o2.num_dist_value, best_scv[5]
-              FROM
-              (
-                  SELECT s1.tid, s1.nid,
-                      {madlib_schema}.__best_scv_aggr
-                      (
-                          scv,
-                          s1.fid,
-                          coalesce(s1.split_value,0)
-                      ) AS best_scv
-                  FROM
-                  (
-                      SELECT t1.tid, t1.nid, t1.fid, split_value,
-                          {madlib_schema}.__scv_aggr
-                          (
-                              {split_criterion},
-                              is_cont, 
-                              {num_classes},
-                              le,
-                              total,
-                              t2.node_size
-                          ) AS scv
-                      FROM
-                      (
-                          SELECT tid, nid, fid, fval, is_cont,
-                              CASE WHEN (is_cont) THEN
-                                  fval
-                              ELSE
-                                  NULL::FLOAT8
-                              END AS split_value,
-                              CASE WHEN (is_cont) THEN
-                                  m4_ifdef(`__GREENPLUM__', `sum(count)', 
-                                  `{madlib_schema}.__bigint_array_sum(count)') 
-                                  OVER
-                                  (
-                                      PARTITION BY tid, nid, fid
-                                      ORDER BY fval
-                                      ROWS BETWEEN UNBOUNDED PRECEDING 
-                                          AND CURRENT ROW
-                                  )
-                              ELSE
-                                  count
-                              END AS le
-                          FROM training_instance_aux
-                      ) t1,
-                      (
-                          {select_stmt}
-                      ) t2
-                      WHERE t1.tid = t2.tid AND t1.nid = t2.nid AND 
-                          t1.fid = t2.fid
-                      GROUP BY t1.tid, t1.nid, t1.fid, split_value
-                  ) s1
-                  GROUP BY s1.tid, s1.nid
-              ) o1 
-              INNER JOIN {feature_table_name} o2 
-              ON o1.best_scv[6]::INT = o2.id
-      """.format (
-          madlib_schema = madlib_schema,
-          output_table = output_table,
-          continue_grow = continue_grow,
-          confidence_level = confidence_level,
-          split_criterion = split_criterion,
-          num_classes = num_classes,
-          select_stmt = select_stmt,
-          feature_table_name = feature_table_name,
-      )
-
+        INSERT INTO {output_table}
+        SELECT tid, nid, best_scv[6], best_scv[4], best_scv[3], 
+               best_scv[1],
+               CASE WHEN (best_scv[1] < 1e-9 OR 
+                          best_scv[4] > 1-1e-9 OR 
+                          {continue_grow} <= 0) THEN 0
+                    ELSE 1
+               END AS live,
+               {madlib_schema}.__ebp_calc_errors
+               (
+                   best_scv[5], 
+                   best_scv[4], 
+                   {confidence_level}
+               ) AS ebp_coeff,
+               o2.is_cont,
+               CASE WHEN( o2.is_cont ) THEN best_scv[7]
+                    ELSE NULL
+               END AS split_value,
+               o2.num_dist_value, best_scv[5]
+        FROM
+        (
+            SELECT s1.tid, s1.nid,
+            {madlib_schema}.__best_scv_aggr
+            (
+                scv,
+                s1.fid,
+                coalesce(s1.split_value,0)
+            ) AS best_scv
+            FROM
+            (
+                SELECT t1.tid, t1.nid, t1.fid, split_value,
+                       {madlib_schema}.__scv_aggr
+                       (
+                           {split_criterion},
+                           is_cont, 
+                           {num_classes},
+                           le,
+                           total,
+                           t2.node_size
+                       ) AS scv
+                FROM
+                (
+                    SELECT tid, nid, fid, fval, is_cont,
+                           CASE WHEN (is_cont) THEN fval
+                                ELSE NULL::FLOAT8
+                           END AS split_value,
+                           CASE WHEN (is_cont) THEN
+                                m4_ifdef(`__GREENPLUM__', `sum(count)', 
+                                `{madlib_schema}.__bigint_array_sum(count)') 
+                                OVER
+                                (
+                                    PARTITION BY tid, nid, fid
+                                    ORDER BY fval
+                                    ROWS BETWEEN UNBOUNDED PRECEDING AND 
+                                    CURRENT ROW
+                                )
+                                ELSE count
+                           END AS le
+                    FROM training_instance_aux
+                ) t1,
+                (
+                    {select_stmt}
+                ) t2
+                WHERE t1.tid = t2.tid AND t1.nid = t2.nid AND 
+                      t1.fid = t2.fid
+                GROUP BY t1.tid, t1.nid, t1.fid, split_value
+            ) s1
+            GROUP BY s1.tid, s1.nid
+        ) o1 
+        INNER JOIN {feature_table_name} o2 
+        ON o1.best_scv[6]::INT = o2.id
+        """.format(
+            madlib_schema = madlib_schema,
+            output_table = output_table,
+            continue_grow = continue_grow,
+            confidence_level = confidence_level,
+            split_criterion = split_criterion,
+            num_classes = num_classes,
+            select_stmt = select_stmt,
+            feature_table_name = feature_table_name)
     plpy.execute(curstmt)
 
 
@@ -686,8 +644,7 @@ def __create_tree_tables(madlib_schema, result_tree_table_name):
             nid             INT,
             node_size       INT
         )m4_ifdef(`__GREENPLUM__', `DISTRIBUTED BY (tid,nid)')
-        """
-    )
+        """)
 
     """
     The table below stores the decision tree information just constructed.
@@ -754,8 +711,7 @@ def __create_tree_tables(madlib_schema, result_tree_table_name):
     plpy.execute(
         """
         DROP TABLE IF EXISTS {result_tree_table_name} CASCADE;
-        """.format(result_tree_table_name = result_tree_table_name)
-    )
+        """.format(result_tree_table_name = result_tree_table_name))
     plpy.execute(
         """
         CREATE TABLE {result_tree_table_name}
@@ -777,8 +733,7 @@ def __create_tree_tables(madlib_schema, result_tree_table_name):
             tid             INT,
             dp_ids          INT[]
         ) m4_ifdef(`__GREENPLUM__', `DISTRIBUTED BY (tid,id)');
-        """.format(result_tree_table_name = result_tree_table_name)
-    )
+        """.format(result_tree_table_name = result_tree_table_name))
     
     """
     The following table stored the auxiliary information for updating the
@@ -796,8 +751,7 @@ def __create_tree_tables(madlib_schema, result_tree_table_name):
             svalue      FLOAT,
             is_cont     BOOL
         ) m4_ifdef(`__GREENPLUM__', `DISTRIBUTED BY (nid)');
-        """
-    )
+        """)
     plpy.execute("DROP TABLE IF EXISTS tr_assoc_ping CASCADE")
     plpy.execute("DROP TABLE IF EXISTS tr_assoc_pong CASCADE")
     plpy.execute("DROP TABLE IF EXISTS sf_assoc CASCADE")
@@ -829,8 +783,7 @@ m4_ifdef(>>>__GREENPLUM_GE_4_2_1__<<<, >>>
         )
         WITH(appendonly=true, orientation=column)
         DISTRIBUTED BY(id);
-        """
-    )
+        """)
 
     plpy.execute(
         """
@@ -841,8 +794,7 @@ m4_ifdef(>>>__GREENPLUM_GE_4_2_1__<<<, >>>
         )
         WITH(appendonly=true, orientation=column)
         DISTRIBUTED BY(fid);
-        """
-    )
+        """)
 <<<, >>>
     plpy.execute(
         """
@@ -853,8 +805,7 @@ m4_ifdef(>>>__GREENPLUM_GE_4_2_1__<<<, >>>
             tid     INT,
             weight  INT
         )m4_ifdef(`__GREENPLUM__', `DISTRIBUTED BY (id)');
-        """
-    )
+        """)
 
     plpy.execute(
         """
@@ -865,8 +816,7 @@ m4_ifdef(>>>__GREENPLUM_GE_4_2_1__<<<, >>>
             tid     INT,
             weight  INT
         )m4_ifdef(`__GREENPLUM__', `DISTRIBUTED BY (id)');
-        """
-    )
+        """)
 
     plpy.execute(
         """
@@ -875,18 +825,16 @@ m4_ifdef(>>>__GREENPLUM_GE_4_2_1__<<<, >>>
             nid     INT,
             fid     INT
         )m4_ifdef(`__GREENPLUM__', `DISTRIBUTED BY (fid)');
-        """  
-    )
+        """)
 <<<)
 m4_changequote(>>>`<<<, >>>'<<<)
 
 
 def __rep_prune_tree(
-    madlib_schema       ,
-    tree_table_name     ,
-    validation_table    ,
-    max_num_classes     
-):
+    madlib_schema,
+    tree_table_name,
+    validation_table,
+    max_num_classes):
     """
     @brief Prune the trained tree with "Reduced Error Pruning" algorithm.
 
@@ -897,43 +845,38 @@ def __rep_prune_tree(
     metatable_name = __get_metatable_name(madlib_schema, tree_table_name)
     id_col_name = preproc.__get_id_column_name(madlib_schema, metatable_name)
     class_col_name = preproc.__get_class_column_name(
-                         madlib_schema,
-                         metatable_name
-                     )
+        madlib_schema,
+        metatable_name)
 
     # the value of class column in validation table must in the KV table
     curstmt = """
-              SELECT COUNT(*) AS count
-              FROM {validation_table}
-              WHERE {madlib_schema}.__to_char({class_col_name}) NOT IN
+        SELECT COUNT(*) AS count
+        FROM {validation_table}
+        WHERE {madlib_schema}.__to_char({class_col_name}) NOT IN
               (
                   SELECT fval 
                   FROM {class_table_name}
                   WHERE fval IS NOT NULL
               )
-              """.format(
-                  madlib_schema = madlib_schema,
-                  validation_table = validation_table,
-                  class_col_name = class_col_name,
-                  class_table_name = preproc.__get_classtable_name(
-                                         madlib_schema, 
-                                         metatable_name
-                                     )
-              )
+        """.format(
+            madlib_schema = madlib_schema,
+            validation_table = validation_table,
+            class_col_name = class_col_name,
+            class_table_name = preproc.__get_classtable_name(
+                madlib_schema, 
+                metatable_name))
     n_t = plpy.execute(curstmt)
     n = util.__get_query_value(n_t, "count")
 
-    util.__assert (
+    util.__assert(
         n == 0,
-        'the value of class column in validation table must in training table' 
-    )
+        'the value of class column in validation table must in training table')
 
     table_names = __treemodel_classify_internal(
-                      madlib_schema,
-                      validation_table,
-                      tree_table_name,
-                      0
-                  )
+        madlib_schema,
+        validation_table,
+        tree_table_name,
+        0)
 
     encoded_table_name = table_names[0]
     classify_result = table_names[1]
@@ -950,8 +893,7 @@ m4_ifdef(>>>__GREENPLUM_PRE_4_1__<<<, >>>
         CREATE TEMP TABLE tree_rep_pong AS 
         SELECT * FROM {classify_result}
         LIMIT 0 m4_ifdef(`__GREENPLUM__', `DISTRIBUTED BY (id)')
-        """.format(classify_result = classify_result)
-    )
+        """.format(classify_result = classify_result))
 <<<)
 m4_changequote(>>>`<<<, >>>'<<<)
 
@@ -965,50 +907,47 @@ m4_changequote(>>>`<<<, >>>'<<<)
                 parent_id BIGINT,
                 max_class  INT
             ) m4_ifdef(`__GREENPLUM__', `DISTRIBUTED BY (parent_id)')
-            """
-        )
+            """)
         
         curstmt = """
-                  INSERT INTO selected_parent_ids_rep
-                  SELECT parent_id, t.g[1] AS max_class
-                  FROM
+            INSERT INTO selected_parent_ids_rep
+            SELECT parent_id, t.g[1] AS max_class
+            FROM
+            (
+                SELECT parent_id,
+                {madlib_schema}.__rep_aggr_class_count (
+                    c.class,
+                    s.{class_col_name},
+                    {max_num_classes}
+                ) AS g
+                FROM {classify_result} c, {encoded_table_name} s
+                WHERE c.id=s.{id_col_name}
+                GROUP BY parent_id
+            ) t
+            WHERE t.g[2] >= 0 AND
+                  t.parent_id IN
                   (
-                      SELECT parent_id,
-                          {madlib_schema}.__rep_aggr_class_count (
-                              c.class,
-                              s.{class_col_name},
-                              {max_num_classes}
-                          ) AS g
-                      FROM {classify_result} c, {encoded_table_name} s
-                      WHERE c.id=s.{id_col_name}
-                      GROUP BY parent_id
-                  ) t
-                  WHERE t.g[2] >= 0 AND
-                      t.parent_id IN
-                      (
-                          SELECT parent_id FROM {tree_table_name}
-                          WHERE parent_id NOT IN
-                          (
-                              SELECT parent_id
-                              FROM {tree_table_name}
-                              WHERE lmc_nid IS NOT NULL
-                          ) and id <> 1
-                      )
-                  """.format(
-                      madlib_schema = madlib_schema,
-                      class_col_name = class_col_name,
-                      max_num_classes = max_num_classes,
-                      classify_result = classify_result,
-                      encoded_table_name = encoded_table_name,
-                      id_col_name = id_col_name,
-                      tree_table_name = tree_table_name
+                      SELECT parent_id 
+                      FROM {tree_table_name}
+                      WHERE parent_id NOT IN
+                            (
+                                SELECT parent_id
+                                FROM {tree_table_name}
+                                WHERE lmc_nid IS NOT NULL
+                            ) and id <> 1
                   )
-
+            """.format(
+                madlib_schema = madlib_schema,
+                class_col_name = class_col_name,
+                max_num_classes = max_num_classes,
+                classify_result = classify_result,
+                encoded_table_name = encoded_table_name,
+                id_col_name = id_col_name,
+                tree_table_name = tree_table_name)
         plpy.execute(curstmt)
 
         t = plpy.execute(
-                "SELECT parent_id FROM selected_parent_ids_rep limit 1"
-            )
+                "SELECT parent_id FROM selected_parent_ids_rep limit 1")
         num_parent_ids = util.__get_query_value(t, "parent_id")
         
         if num_parent_ids is None:
@@ -1026,57 +965,56 @@ m4_ifdef(`__GREENPLUM_PRE_4_1__', >>>
         plpy.execute("TRUNCATE " + temp_text)
         
         curstmt = """
-                  INSERT INTO {temp_text}(id, class, parent_id, leaf_id)
-                  SELECT m.id,  t.max_class, t.parent_id, t.id
-                  FROM {classify_result} m, {tree_table_name} t
-                  WHERE t.id IN 
-                      (
-                          SELECT parent_id 
-                          FROM selected_parent_ids_rep
-                      ) AND m.parent_id = t.id
-                  """.format (
-                      temp_text = temp_text,
-                      classify_result = classify_result,
-                      tree_table_name = tree_table_name
-                  ) 
+            INSERT INTO {temp_text}(id, class, parent_id, leaf_id)
+            SELECT m.id,  t.max_class, t.parent_id, t.id
+            FROM {classify_result} m, {tree_table_name} t
+            WHERE t.id IN 
+                  (
+                      SELECT parent_id 
+                      FROM selected_parent_ids_rep
+                  ) AND m.parent_id = t.id
+            """.format(
+                temp_text = temp_text,
+                classify_result = classify_result,
+                tree_table_name = tree_table_name) 
         plpy.execute(curstmt)
         
         classify_result = temp_text
 <<<, >>>
         curstmt = """
-                  UPDATE {classify_result} m set class = t.max_class,
-                      parent_id = t.parent_id, leaf_id = t.id
-                  FROM {tree_table_name} t
-                  WHERE t.id IN 
-                  (
-                      SELECT parent_id 
-                      FROM selected_parent_ids_rep
-                  ) AND m.parent_id=t.id
-                  """.format(
-                      classify_result = classify_result, 
-                      tree_table_name = tree_table_name
-                  )
+            UPDATE {classify_result} m set class = t.max_class,
+                   parent_id = t.parent_id, leaf_id = t.id
+            FROM {tree_table_name} t
+            WHERE t.id IN 
+            (
+                SELECT parent_id 
+                FROM selected_parent_ids_rep
+            ) AND m.parent_id=t.id
+            """.format(
+                classify_result = classify_result, 
+                tree_table_name = tree_table_name)
         plpy.execute(curstmt)
 <<<)
 m4_changequote(>>>`<<<, >>>'<<<)
         
-        curstmt = """DELETE FROM {tree_table_name} WHERE parent_id IN
-                     (SELECT parent_id FROM selected_parent_ids_rep)
-                  """.format(tree_table_name = tree_table_name)
+        curstmt = """
+            DELETE FROM {tree_table_name} WHERE parent_id IN
+            (SELECT parent_id FROM selected_parent_ids_rep)
+            """.format(tree_table_name = tree_table_name)
         plpy.execute(curstmt)
 
-        curstmt = """UPDATE {tree_table_name} t1 SET lmc_nid = NULL,
-                         lmc_fval = NULL, max_class = t2.max_class
-                     FROM selected_parent_ids_rep t2
-                     WHERE t1.id = t2.parent_id;
-                  """.format(tree_table_name = tree_table_name)
+        curstmt = """
+            UPDATE {tree_table_name} t1 SET lmc_nid = NULL,
+                   lmc_fval = NULL, max_class = t2.max_class
+            FROM selected_parent_ids_rep t2
+            WHERE t1.id = t2.parent_id;
+            """.format(tree_table_name = tree_table_name)
         plpy.execute(curstmt)
 
     plpy.execute(
         """
         DROP TABLE IF EXISTS {encoded_table_name} CASCADE;
-        """.format(encoded_table_name = encoded_table_name)
-    )
+        """.format(encoded_table_name = encoded_table_name))
 
 
 def __ebp_prune_tree(madlib_schema, tree_table_name):
@@ -1091,61 +1029,59 @@ def __ebp_prune_tree(madlib_schema, tree_table_name):
             """
             CREATE TEMP TABLE selected_parent_ids_ebp(parent_id BIGINT)
             m4_ifdef(`__GREENPLUM__', `DISTRIBUTED BY(parent_id)')
-            """
-        )
+            """)
         
         curstmt = """
-                  INSERT INTO selected_parent_ids_ebp
-                  SELECT s.parent_id as parent_id
-                  FROM
-                  (
-                      SELECT parent_id, sum(ebp_coeff) AS ebp_coeff
-                      FROM
-                      (
-                          SELECT parent_id, ebp_coeff
-                          FROM {tree_table_name}
-                          WHERE parent_id NOT IN
-                          (
-                              SELECT parent_id
-                              FROM {tree_table_name}
-                              WHERE lmc_nid IS NOT NULL
-                          )  AND id <> 1
-                      ) m
-                         GROUP BY m.parent_id
-                  ) s
-                  LEFT JOIN  {tree_table_name} p
-                  ON p.id = s.parent_id
-                  WHERE  p.ebp_coeff < s.ebp_coeff
-                  """.format(tree_table_name = tree_table_name)
+            INSERT INTO selected_parent_ids_ebp
+            SELECT s.parent_id as parent_id
+            FROM
+            (
+                SELECT parent_id, sum(ebp_coeff) AS ebp_coeff
+                FROM
+                (
+                    SELECT parent_id, ebp_coeff
+                    FROM {tree_table_name}
+                    WHERE parent_id NOT IN
+                    (
+                        SELECT parent_id
+                        FROM {tree_table_name}
+                        WHERE lmc_nid IS NOT NULL
+                    )  AND id <> 1
+                ) m
+                GROUP BY m.parent_id
+            ) s
+            LEFT JOIN  {tree_table_name} p
+            ON p.id = s.parent_id
+            WHERE  p.ebp_coeff < s.ebp_coeff
+            """.format(tree_table_name = tree_table_name)
         plpy.execute(curstmt)
         
         t = plpy.execute(
-                """
-                SELECT parent_id FROM selected_parent_ids_ebp LIMIT 1
-                """
-            )
+            """
+            SELECT parent_id FROM selected_parent_ids_ebp LIMIT 1
+            """)
         num_parent_ids = util.__get_query_value(t, "parent_id")
 
         if num_parent_ids is None:
             break
 
         curstmt = """
-                  DELETE FROM {tree_table_name}
-                  WHERE parent_id IN
+            DELETE FROM {tree_table_name}
+            WHERE parent_id IN
                   (
                       SELECT parent_id FROM selected_parent_ids_ebp
                   )
-                  """.format(tree_table_name = tree_table_name)
+            """.format(tree_table_name = tree_table_name)
         plpy.execute(curstmt)
 
         curstmt = """
-                  UPDATE {tree_table_name}
-                  SET lmc_nid = NULL, lmc_fval = NULL
-                  WHERE id IN
+            UPDATE {tree_table_name}
+            SET lmc_nid = NULL, lmc_fval = NULL
+            WHERE id IN
                   (
                       SELECT parent_id FROM selected_parent_ids_ebp
                   )
-                  """.format(tree_table_name = tree_table_name)
+            """.format(tree_table_name = tree_table_name)
         plpy.execute(curstmt)
 
 
@@ -1159,28 +1095,23 @@ def __generate_final_tree(madlib_schema, result_tree_table_name):
         """
         DELETE FROM {result_tree_table_name} 
         WHERE COALESCE(num_of_samples, 0) = 0
-        """.format(result_tree_table_name = result_tree_table_name)
-    )
+        """.format(result_tree_table_name = result_tree_table_name))
 
     # for each node, find the left most child node id and the feature value, 
     # and update the node's lmc_nid and lmc_fval column
     curstmt = """
-              UPDATE {result_tree_table_name} k
-              SET lmc_nid = g.lmc_nid, lmc_fval = g.lmc_fval
-              FROM
-              (   
-                  SELECT parent_id,
-                      min(id) as lmc_nid,
-                      min
-                      (
-                          tree_location[array_upper(tree_location,1)]
-                      )
-                      AS lmc_fval
-                  FROM {result_tree_table_name}
-                  GROUP BY parent_id
-              ) g
-              WHERE k.id = g.parent_id
-              """.format(result_tree_table_name = result_tree_table_name)
+        UPDATE {result_tree_table_name} k
+        SET lmc_nid = g.lmc_nid, lmc_fval = g.lmc_fval
+        FROM
+        (   
+            SELECT parent_id,
+                   min(id) as lmc_nid,
+                   min(tree_location[array_upper(tree_location,1)]) AS lmc_fval
+            FROM {result_tree_table_name}
+            GROUP BY parent_id
+        ) g
+        WHERE k.id = g.parent_id
+        """.format(result_tree_table_name = result_tree_table_name)
     plpy.execute(curstmt)
 
     """
@@ -1189,68 +1120,68 @@ def __generate_final_tree(madlib_schema, result_tree_table_name):
     should apply the same operation to the new leaf nodes until no nodes
     meet this criterion.
     """
-    while True :
+    while True:
         plpy.execute("DROP TABLE IF EXISTS trim_tree_aux_table CASCADE") 
         # Find nodes whose children should be removed.
         curstmt = """
-                  CREATE TEMP TABLE trim_tree_aux_table AS
-                  SELECT parent_id FROM
-                  (
-                      SELECT parent_id, count(distinct max_class) AS class_count
-                      FROM {result_tree_table_name}
-                      WHERE parent_id IN
-                      (
-                          SELECT parent_id FROM {result_tree_table_name}
-                          WHERE parent_id NOT IN
-                          (
-                              SELECT parent_id 
-                              FROM {result_tree_table_name}
-                              WHERE lmc_nid IS NOT NULL
-                          ) and parent_id <> 0
-                      ) 
-                      GROUP BY parent_id
-                  ) l
-                  WHERE l.class_count = 1
-                  m4_ifdef(`__GREENPLUM__', `DISTRIBUTED BY (parent_id)')   
-                  """.format(result_tree_table_name = result_tree_table_name)
+            CREATE TEMP TABLE trim_tree_aux_table AS
+            SELECT parent_id
+            FROM
+            (
+                SELECT parent_id, count(distinct max_class) AS class_count
+                FROM {result_tree_table_name}
+                WHERE parent_id IN
+                (
+                    SELECT parent_id FROM {result_tree_table_name}
+                    WHERE parent_id NOT IN
+                    (
+                        SELECT parent_id 
+                        FROM {result_tree_table_name}
+                        WHERE lmc_nid IS NOT NULL
+                    ) and parent_id <> 0
+                ) 
+                GROUP BY parent_id
+            ) l
+            WHERE l.class_count = 1
+            m4_ifdef(`__GREENPLUM__', `DISTRIBUTED BY (parent_id)')   
+            """.format(result_tree_table_name = result_tree_table_name)
         plpy.execute(curstmt)
 
         t = plpy.execute("SELECT count(*) AS count FROM trim_tree_aux_table")
         num_redundant_nodes = util.__get_query_value(t, "count")
 
-        if num_redundant_nodes <= 0 :
+        if num_redundant_nodes <= 0:
             break
 
         # Delete the found redundant nodes.
         curstmt = """
-                  DELETE FROM {result_tree_table_name} t   
-                  WHERE t.parent_id IN
-                  (
-                      SELECT parent_id FROM trim_tree_aux_table
-                  )
-                  """.format(result_tree_table_name = result_tree_table_name)
+            DELETE FROM {result_tree_table_name} t   
+            WHERE t.parent_id IN
+            (
+                SELECT parent_id FROM trim_tree_aux_table  
+            )
+            """.format(result_tree_table_name = result_tree_table_name)
         plpy.execute(curstmt)
 
         # Set the nodes, whose children are removed, to be leaf nodes.
         curstmt = """
-                  UPDATE {result_tree_table_name} k
-                  SET lmc_nid = NULL, lmc_fval = NULL
-                  FROM 
-                  (
-                      SELECT parent_id FROM trim_tree_aux_table
-                  ) g
-                  WHERE k.id = g.parent_id
-                  """.format(result_tree_table_name = result_tree_table_name)
+            UPDATE {result_tree_table_name} k
+            SET lmc_nid = NULL, lmc_fval = NULL
+            FROM
+            (
+                SELECT parent_id FROM trim_tree_aux_table
+            ) g
+            WHERE k.id = g.parent_id
+            """.format(result_tree_table_name = result_tree_table_name)
         plpy.execute(curstmt)
 
 
 def __sample_with_replacement(
-    madlib_schema,
-    num_of_tree,
-    size_per_tree,
-    src_table,
-    target_table
-):
+        madlib_schema,
+        num_of_tree,
+        size_per_tree,
+        src_table,
+        target_table):
     """
     @brief The function samples with replacement from source table and store
            the results to target table.
@@ -1274,12 +1205,11 @@ m4_changequote(`>>>', `<<<')
 m4_ifdef(>>>__GREENPLUM__<<<, >>>
     # get the segment number
     t = plpy.execute(
-            """
-            SELECT COUNT(distinct content) AS count 
-            FROM gp_segment_configuration
-            WHERE content <> -1
-            """
-        )
+        """
+        SELECT COUNT(distinct content) AS count 
+        FROM gp_segment_configuration
+        WHERE content <> -1
+        """)
     segment_num = util.__get_query_value(t, "count")
 <<<, >>>
     # fix the segment number to 1 for PG
@@ -1295,23 +1225,20 @@ m4_changequote(>>>`<<<, >>>'<<<)
         (
             segment_id  INT
         ) m4_ifdef(`__GREENPLUM__', `DISTRIBUTED BY(segment_id)')
-        """
-    )
+        """)
 
     # Insert segment_num of records distributed by segment id
     plpy.execute(
         """
         INSERT INTO auxiliary_segment_table 
         SELECT generate_series(1, {segment_num})
-        """.format(segment_num = segment_num)
-    )
+        """.format(segment_num = segment_num))
 
     t = plpy.execute(
-            """
-            SELECT max(id) as max, min(id) as min, count(id) as record_num
-            FROM 
-            """ + src_table
-        )
+        """
+        SELECT max(id) as max, min(id) as min, count(id) as record_num
+        FROM 
+        """ + src_table)
     max_id = util.__get_query_value(t, "max")
     min_id = util.__get_query_value(t, "min")
     record_num = util.__get_query_value(t, "record_num")
@@ -1326,17 +1253,17 @@ m4_changequote(>>>`<<<, >>>'<<<)
         int((sample_ratio * num_of_tree * size_per_tree) / segment_num)
     
     # add the weight field
-    if range > record_num :
+    if range > record_num:
         # remove those invalid samples with join operation
         stmt = """
-               INSERT INTO {target_table}(id, tid, nid, weight)
-               SELECT record_id,
+            INSERT INTO {target_table}(id, tid, nid, weight)
+            SELECT record_id,
                    tid AS tid,
                    tid AS nid,
                    count(*) AS weight
-               FROM     
-               (
-                   SELECT  
+            FROM     
+            (
+                SELECT  
                        {madlib_schema}.__sample_within_range
                        (
                            {sample_per_seg}, 
@@ -1348,30 +1275,29 @@ m4_changequote(>>>`<<<, >>>'<<<)
                            1, 
                            {num_of_tree}
                        ) AS tid
-                    FROM auxiliary_segment_table
-               ) t,
-               {src_table} k
-               WHERE t.record_id = k.id
-               GROUP BY record_id, tid, nid
-               """.format (
-                   madlib_schema = madlib_schema,
-                   target_table = target_table,
-                   sample_per_seg = sample_per_seg,
-                   min_id = min_id,
-                   max_id = max_id,
-                   num_of_tree = num_of_tree,
-                   src_table = src_table
-               )
-    else :
+                FROM auxiliary_segment_table
+            ) t,
+            {src_table} k
+            WHERE t.record_id = k.id
+            GROUP BY record_id, tid, nid
+            """.format (
+                madlib_schema = madlib_schema,
+                target_table = target_table,
+                sample_per_seg = sample_per_seg,
+                min_id = min_id,
+                max_id = max_id,
+                num_of_tree = num_of_tree,
+                src_table = src_table)
+    else:
         stmt = """
-               INSERT INTO {target_table}(id, tid, nid, weight)
-               SELECT record_id,
+            INSERT INTO {target_table}(id, tid, nid, weight)
+            SELECT record_id,
                    tid AS tid,
                    tid AS nid,
                    count(*) AS weight
-               FROM
-               (
-                   SELECT 
+            FROM
+            (
+                SELECT 
                        {madlib_schema}.__sample_within_range
                        (
                            {sample_per_seg}, 
@@ -1384,40 +1310,38 @@ m4_changequote(>>>`<<<, >>>'<<<)
                            1,
                            {num_of_tree}
                        ) AS tid
-                   FROM auxiliary_segment_table
-               ) t
-               GROUP BY record_id, tid, nid
-               """.format (
-                   madlib_schema = madlib_schema,
-                   target_table = target_table,
-                   sample_per_seg = sample_per_seg,
-                   min_id = min_id,
-                   max_id = max_id,
-                   num_of_tree = num_of_tree
-               )
+                FROM auxiliary_segment_table
+            ) t
+            GROUP BY record_id, tid, nid
+            """.format(
+                madlib_schema = madlib_schema,
+                target_table = target_table,
+                sample_per_seg = sample_per_seg,
+                min_id = min_id,
+                max_id = max_id,
+                num_of_tree = num_of_tree)
     plpy.execute(stmt)
 
 
-def __train_tree (
-    madlib_schema           ,
-    split_criterion         ,
-    num_trees               ,
-    features_per_node       ,
-    training_table_name     ,
-    training_table_meta     ,
-    result_tree_table_name  ,
-    validation_table_name   ,
-    id_col_name             ,
-    class_col_name          ,
-    confidence_level        ,
-    max_tree_depth          ,
-    sampling_percentage     ,
-    node_prune_threshold    ,
-    node_split_threshold    ,
-    sampling_needed         ,
-    h2hmv_routine_id        ,
-    verbosity               
-):
+def __train_tree(
+        madlib_schema,
+        split_criterion,
+        num_trees,
+        features_per_node,
+        training_table_name,
+        training_table_meta,
+        result_tree_table_name,
+        validation_table_name,
+        id_col_name,
+        class_col_name,
+        confidence_level,
+        max_tree_depth,
+        sampling_percentage,
+        node_prune_threshold,
+        node_split_threshold,
+        sampling_needed,
+        h2hmv_routine_id,
+        verbosity):
     """
     @brief This function trains a decision tree or random forest.
     @param split_criterion          This parameter specifies which split
@@ -1472,40 +1396,40 @@ def __train_tree (
     need_analyze = True
 
     # record the time costed in different steps when training
-    begin_func_exec     = datetime.datetime.now()
-    scv_acs_time        = begin_func_exec - begin_func_exec
-    calc_olap_time      = scv_acs_time
-    calc_acc_time       = scv_acs_time
-    calc_pre_time       = scv_acs_time
-    ins_upd_time        = scv_acs_time
-    calc_update_best    = scv_acs_time
-    calc_update_child   = scv_acs_time
-    calc_update_nid     = scv_acs_time
-    bld_assoc_time      = scv_acs_time
-    prune_time          = scv_acs_time
+    begin_func_exec = datetime.datetime.now()
+    scv_acs_time = begin_func_exec - begin_func_exec
+    calc_olap_time = scv_acs_time
+    calc_acc_time = scv_acs_time
+    calc_pre_time = scv_acs_time
+    ins_upd_time = scv_acs_time
+    calc_update_best = scv_acs_time
+    calc_update_child = scv_acs_time
+    calc_update_nid = scv_acs_time
+    bld_assoc_time = scv_acs_time
+    prune_time = scv_acs_time
 
-    if split_criterion == "infogain" :
+    if split_criterion == "infogain":
         sc_code = 1
-    elif split_criterion == "gainratio" :
+    elif split_criterion == "gainratio":
         sc_code = 2
-    elif split_criterion == "gini" :
+    elif split_criterion == "gini":
         sc_code = 3
-    else :
+    else:
         plpy.error("Invalid split criterion!")
 
     num_classes = preproc.__num_of_class(madlib_schema, training_table_meta)
 
-    if verbosity > 0 :
+    if verbosity > 0:
         plpy.info("NUMBER OF CLASSES IN THE TRAINING SET " + str(num_classes))
        
-    if num_classes < 2 :
+    if num_classes < 2:
         plpy.error("the number of classes must be greater than 2")
 
     curstmt = """
-              SELECT count(*) AS count
-              FROM {training_table_meta}
-              WHERE column_type = 'f'
-              """.format(training_table_meta = training_table_meta)
+        SELECT count(*) AS count
+        FROM {training_table_meta}
+        WHERE column_type = 'f'
+        """.format(training_table_meta = training_table_meta)
     t = plpy.execute(curstmt)
     attr_count = util.__get_query_value(t, "count")
 
@@ -1515,13 +1439,12 @@ def __train_tree (
         'tmp_dt_hori_table', 
         training_table_name,
         attr_count, 
-        verbosity
-    )
+        verbosity)
 
     t = plpy.execute("SELECT count(*) AS count FROM tmp_dt_hori_table")
     total_size = util.__get_query_value(t, "count")
 
-    if verbosity > 0 :
+    if verbosity > 0:
         plpy.info("INPUT TABLE SIZE: " + str(total_size))
 
     begin_bld_assoc = datetime.datetime.now()
@@ -1536,7 +1459,7 @@ def __train_tree (
         nid    --   The id of a node in a tree.
         weight --   The times a record is assigned to a node.
     """
-    if sampling_needed :
+    if sampling_needed:
         plpy.execute(
             """
             SELECT {madlib_schema}.__sample_with_replacement
@@ -1546,19 +1469,17 @@ def __train_tree (
                 'tmp_dt_hori_table',
                 '{cur_tr_table}'
             )
-            """.format (
+            """.format(
                 num_trees = num_trees,
                 sample_size = int(round(sampling_percentage * total_size)),
                 cur_tr_table = cur_tr_table,
-                madlib_schema = madlib_schema
-            )
-        )
-    else :
+                madlib_schema = madlib_schema))
+    else:
         curstmt = """
-                  INSERT INTO {cur_tr_table}
-                  SELECT id, 1 as tid, 1 as nid, 1 as weight
-                  FROM tmp_dt_hori_table
-                  """.format(cur_tr_table = cur_tr_table)
+            INSERT INTO {cur_tr_table}
+            SELECT id, 1 as tid, 1 as nid, 1 as weight
+            FROM tmp_dt_hori_table
+            """.format(cur_tr_table = cur_tr_table)
         plpy.execute(curstmt)
 
     # analyze ping
@@ -1568,74 +1489,70 @@ def __train_tree (
     # generate the root node for all trees.
     # the generated numbers are the same for the two generate_series
     curstmt = """
-              INSERT INTO {result_tree_table_name}
-              (
-                  id, tree_location, feature, probability, max_class,scv,
-                  live, num_of_samples, parent_id, tid
-              )
-              SELECT generate_series(1, {num_trees}), ARRAY[0], 0, 1, 1, 1, 1,
-                  0, 0, generate_series(1, {num_trees})
-              """.format(
-                  result_tree_table_name = result_tree_table_name, 
-                  num_trees = num_trees
-              )
+        INSERT INTO {result_tree_table_name}
+        (
+            id, tree_location, feature, probability, max_class,scv,
+            live, num_of_samples, parent_id, tid
+        )
+        SELECT generate_series(1, {num_trees}), ARRAY[0], 0, 1, 1, 1, 1,
+               0, 0, generate_series(1, {num_trees})
+        """.format(
+            result_tree_table_name = result_tree_table_name, 
+            num_trees = num_trees)
     plpy.execute(curstmt)
 
     max_nid = num_trees
     location_size = 0
 
-    while True :
+    while True:
         t = plpy.execute(
-                """
-                SELECT COUNT(id) AS count
-                FROM {result_tree_table_name}
-                WHERE live > 0 AND array_upper(tree_location,1) = {curr_level}
-                """.format(
+            """
+            SELECT COUNT(id) AS count
+            FROM {result_tree_table_name}
+            WHERE live > 0 AND array_upper(tree_location,1) = {curr_level}
+            """.format(
                     result_tree_table_name = result_tree_table_name, 
-                    curr_level = curr_level
-                )
-            )
+                    curr_level = curr_level))
         num_live_nodes = util.__get_query_value(t, "count")
 
-        if num_live_nodes < 1 :
-            if verbosity > 0 :
+        if num_live_nodes < 1:
+            if verbosity > 0:
                 plpy.info("EXIT: no live nodes to split")
             break
 
-        if verbosity > 0 :
+        if verbosity > 0:
             plpy.info("Running on level: " + str(curr_level))
 
         begin_olap_acs = datetime.datetime.now()
  
-        instance_time = __gen_acc (
-                            madlib_schema,
-                            training_table_name,
-                            training_table_meta,
-                            result_tree_table_name,
-                            cur_tr_table,
-                            "sf_assoc",
-                            features_per_node,
-                            num_classes,
-                            sampling_needed,
-                            verbosity
-                        )
+        instance_time = __gen_acc(
+            madlib_schema,
+            training_table_name,
+            training_table_meta,
+            result_tree_table_name,
+            cur_tr_table,
+            "sf_assoc",
+            features_per_node,
+            num_classes,
+            sampling_needed,
+            verbosity)
         
-        if h2hmv_routine_id == 1 :
+        if h2hmv_routine_id == 1:
             # For ignore, we need the true size of nodes to handle the
             # missing values.
             plpy.execute("TRUNCATE node_size_aux")
-
             curstmt = """
-                      INSERT INTO node_size_aux
-                      SELECT tr.tid, tr.nid, sum(weight) as count
-                      FROM {cur_tr_table} tr
-                      GROUP BY tr.tid, tr.nid
-                      """.format(cur_tr_table = cur_tr_table)
+                INSERT INTO node_size_aux
+                SELECT tr.tid, tr.nid, sum(weight) as count
+                FROM {cur_tr_table} tr
+                GROUP BY tr.tid, tr.nid
+                """.format(cur_tr_table = cur_tr_table)
             plpy.execute(curstmt)
 
-        calc_pre_time  = calc_pre_time + instance_time.calc_pre_time
-        calc_acc_time  = calc_acc_time + instance_time.calc_acc_time
-        calc_olap_time = calc_olap_time + (datetime.datetime.now() - begin_olap_acs)
+        calc_pre_time = calc_pre_time + instance_time.calc_pre_time
+        calc_acc_time = calc_acc_time + instance_time.calc_acc_time
+        calc_olap_time = (calc_olap_time + (datetime.datetime.now() - 
+            begin_olap_acs))
 
         curr_level = curr_level + 1
 
@@ -1650,101 +1567,92 @@ def __train_tree (
             grow_tree,
             'find_best_answer_table',
             h2hmv_routine_id,
-            num_classes
-        )
+            num_classes)
 
-        if verbosity > 0 :
+        if verbosity > 0:
             plpy.info(
-                "find best time at this level: " + \
-                str(datetime.datetime.now() - begin_find_best)
-            )
+                ("find best time at this level: " +
+                str(datetime.datetime.now() - begin_find_best)))
 
         grow_tree = grow_tree - 1
 
         scv_acs_time = scv_acs_time + \
-                       (datetime.datetime.now() - begin_find_best)
+            (datetime.datetime.now() - begin_find_best)
         begin_data_transfer = datetime.datetime.now()
         begin_update_best = datetime.datetime.now()
   
         # We get the calculation result for current level.
         # Update the nodes of previous level firstly.
         curstmt = """
-                  UPDATE {result_tree_table_name} t
-                  SET feature        = c.feature,
-                      probability    = c.probability,
-                      max_class      = c.max_class,
-                      scv            = c.max_scv,
-                      ebp_coeff      = c.ebp_coeff,
-                      num_of_samples = c.node_size,
-                      live           = 0,
-                      is_cont        = c.is_cont,
-                      split_value    = c.split_value
-                  FROM find_best_answer_table c
-                  WHERE t.id = c.node_id AND t.tid = c.tid
-                  """.format(result_tree_table_name = result_tree_table_name)
+            UPDATE {result_tree_table_name} t
+            SET feature = c.feature,
+                probability = c.probability,
+                max_class = c.max_class,
+                scv = c.max_scv,
+                ebp_coeff = c.ebp_coeff,
+                num_of_samples = c.node_size,
+                live = 0,
+                is_cont = c.is_cont,
+                split_value = c.split_value
+            FROM find_best_answer_table c
+            WHERE t.id = c.node_id AND t.tid = c.tid
+            """.format(result_tree_table_name = result_tree_table_name)
         plpy.execute(curstmt)
 
         calc_update_best = calc_update_best + \
-                           (datetime.datetime.now() - begin_update_best)
+            (datetime.datetime.now() - begin_update_best)
         begin_update_child = datetime.datetime.now()
 
         curstmt = """
-                  INSERT INTO {result_tree_table_name}
-                  (
-                      id, tree_location, feature, probability,
-                      max_class, scv, live, parent_id, tid, dp_ids
-                  )
-                  SELECT {max_nid}+row, array_append(tree_location, fval),
-                      0, 1, 1, 1, {curr_level}, ans.node_id, ans.tid,
-                      CASE when(NOT ans.is_cont) then
-                          array_append( dp_ids, ans.feature)
-                      ELSE
-                          dp_ids
-                      END
-                  FROM {result_tree_table_name} tree,
-                  (
-                      SELECT  *, row_number()
-                          OVER (ORDER BY l.tid, l.node_id, l.fval) AS row
-                      FROM
-                      (
-                          SELECT  *,
-                              CASE WHEN (is_cont) THEN
-                                  generate_series(1,2)
-                              ELSE
-                                  generate_series(1, distinct_features)
+            INSERT INTO {result_tree_table_name}
+            (
+                id, tree_location, feature, probability,
+                max_class, scv, live, parent_id, tid, dp_ids
+            )
+            SELECT {max_nid}+row, array_append(tree_location, fval),
+                   0, 1, 1, 1, {curr_level}, ans.node_id, ans.tid,
+                   CASE when(NOT ans.is_cont) 
+                        THEN array_append( dp_ids, ans.feature)
+                        ELSE dp_ids
+                   END
+            FROM {result_tree_table_name} tree,
+            (
+                SELECT  *, 
+                        row_number() OVER 
+                        (ORDER BY l.tid, l.node_id, l.fval) AS row
+                FROM
+                (
+                    SELECT  *,
+                            CASE WHEN (is_cont) 
+                                 THEN generate_series(1,2)
+                                 ELSE generate_series(1, distinct_features)
                               END AS fval
-                          FROM
-                              find_best_answer_table
-                          WHERE live > 0 AND 
-                              coalesce(feature, 0) <> 0 AND 
-                              node_size >= {prune_threshold} AND 
-                              node_size >= {split_threshold}
-                      ) l
-                  ) ans
-                  WHERE tree.id=ans.node_id and tree.tid=ans.tid
-                  """.format (
-                      result_tree_table_name = result_tree_table_name,
-                      max_nid = max_nid,
-                      curr_level = curr_level,
-                      prune_threshold = total_size * node_prune_threshold,
-                      split_threshold = total_size * node_split_threshold
-                  )
-
-        if verbosity > 0 :
+                    FROM find_best_answer_table
+                    WHERE live > 0 AND 
+                          coalesce(feature, 0) <> 0 AND 
+                          node_size >= {prune_threshold} AND 
+                          node_size >= {split_threshold}
+                ) l
+            ) ans
+            WHERE tree.id=ans.node_id and tree.tid=ans.tid
+            """.format(
+                result_tree_table_name = result_tree_table_name,
+                max_nid = max_nid,
+                curr_level = curr_level,
+                prune_threshold = total_size * node_prune_threshold,
+                split_threshold = total_size * node_split_threshold)
+        if verbosity > 0:
             plpy.info("Generate Child Nodes: " + curstmt)
-
         plpy.execute(curstmt)
 
         t = plpy.execute("SELECT max(id) AS max FROM " + result_tree_table_name)
         max_nid = util.__get_query_value(t, "max")
 
-        if verbosity > 0 :
+        if verbosity > 0:
             plpy.info(
                 "Max nid:{max_nid}, level:{curr_level}".format(
                     max_nid = max_nid, 
-                    curr_level = curr_level
-                )
-            )
+                    curr_level = curr_level))
 
         """
         insert the leftmost child node id and relevant info
@@ -1753,27 +1661,26 @@ def __train_tree (
         the current node whose id is answer.node_id.
         """
         curstmt = """
-                  INSERT INTO assoc_aux
-                  (
-                      nid, fid, lmc_id, svalue, is_cont
-                  )
-                  SELECT t.id, t.feature, min(l.id),
-                      t.split_value, t.is_cont
-                  FROM
-                  (
-                      SELECT id, parent_id
-                      FROM {result_tree_table_name}
-                      WHERE array_upper(tree_location,1) = {curr_level}
-                  ) l,
-                  {result_tree_table_name} t
-                  WHERE l.parent_id=t.id
-                  GROUP BY t.id, t.feature, t.split_value, t.is_cont
-                  """.format(
-                          result_tree_table_name = result_tree_table_name,
-                          curr_level = curr_level
-                  )
+            INSERT INTO assoc_aux
+            (
+                nid, fid, lmc_id, svalue, is_cont
+            )
+            SELECT t.id, t.feature, min(l.id),
+                   t.split_value, t.is_cont
+            FROM
+            (
+                SELECT id, parent_id
+                FROM {result_tree_table_name}
+                WHERE array_upper(tree_location,1) = {curr_level}
+            ) l,
+            {result_tree_table_name} t
+            WHERE l.parent_id=t.id
+            GROUP BY t.id, t.feature, t.split_value, t.is_cont
+            """.format(
+                result_tree_table_name = result_tree_table_name,
+                curr_level = curr_level)
 
-        if verbosity > 0 :
+        if verbosity > 0:
             plpy.info("Update lmc_child Info: " + curstmt)
 
         plpy.execute(curstmt)
@@ -1784,56 +1691,50 @@ def __train_tree (
         node_prune_threshold will not apply to root node,
         the level is 1 (curr_level - 1 = 1);
         """
-        if curr_level > 2 :
+        if curr_level > 2:
             curstmt = """
-                      DELETE FROM {result_tree_table_name} t
-                      WHERE t.num_of_samples < {prune_threshold} OR 
-                          live = {level}
-                      """.format(
-                          result_tree_table_name = result_tree_table_name,
-                          prune_threshold = total_size * node_prune_threshold,
-                          level = curr_level - 1
-                      )
+                DELETE FROM {result_tree_table_name} t
+                WHERE t.num_of_samples < {prune_threshold} OR 
+                      live = {level}
+                """.format(
+                    result_tree_table_name = result_tree_table_name,
+                    prune_threshold = total_size * node_prune_threshold,
+                    level = curr_level - 1)
             plpy.execute(curstmt)
 
-        calc_update_child   = calc_update_child + \
-                              (datetime.datetime.now() - begin_update_child)
-        begin_update_nid    = datetime.datetime.now()
+        calc_update_child = (calc_update_child + 
+            (datetime.datetime.now() - begin_update_child))
+        begin_update_nid = datetime.datetime.now()
 
         # update the assigned node id for each sample on the current level
         tr_table_index = (tr_table_index % 2) + 1
 
         curstmt = """
-                  INSERT INTO {tr_table} (id, nid, tid, weight)
-                  SELECT
-                      tr.id,
-                      au.lmc_id - 1 +
-                      CASE WHEN (au.is_cont) THEN
-                          CASE WHEN (svalue < vt.fvals[au.fid]) THEN
-                              2
-                          ELSE
-                              1
-                          END
-                      ELSE
-                          vt.fvals[au.fid]::INT
-                      END AS nid,
-                          tid, weight
-                  FROM {cur_tr_table} tr, tmp_dt_hori_table vt, assoc_aux au
-                  WHERE tr.nid = au.nid AND vt.id = tr.id AND 
-                      vt.fvals[au.fid] IS NOT NULL
-                  """.format(
-                      tr_table = tr_tables[tr_table_index - 1],
-                      cur_tr_table = cur_tr_table
-                  )
-
-        if verbosity > 0 :
+            INSERT INTO {tr_table} (id, nid, tid, weight)
+            SELECT
+                   tr.id,
+                   au.lmc_id - 1 +
+                   CASE WHEN (au.is_cont) THEN
+                        CASE WHEN (svalue < vt.fvals[au.fid]) 
+                             THEN 2
+                             ELSE 1
+                        END
+                        ELSE vt.fvals[au.fid]::INT
+                        END AS nid,
+                        tid, weight
+            FROM {cur_tr_table} tr, tmp_dt_hori_table vt, assoc_aux au
+            WHERE tr.nid = au.nid AND vt.id = tr.id AND 
+                  vt.fvals[au.fid] IS NOT NULL
+            """.format(
+                tr_table = tr_tables[tr_table_index - 1],
+                cur_tr_table = cur_tr_table)
+        if verbosity > 0:
             plpy.info(curstmt)
-
         plpy.execute(curstmt)
         plpy.execute("TRUNCATE " + cur_tr_table)
         cur_tr_table = tr_tables[tr_table_index - 1]
 
-        if need_analyze :
+        if need_analyze:
             # analyze pong table
             plpy.execute("ANALYZE " + cur_tr_table)
             need_analyze = False
@@ -1841,84 +1742,78 @@ def __train_tree (
         plpy.execute("TRUNCATE assoc_aux")
 
         calc_update_nid = calc_update_nid + \
-                          (datetime.datetime.now() - begin_update_nid)
+            (datetime.datetime.now() - begin_update_nid)
 
         ins_upd_time = ins_upd_time + \
-                       (datetime.datetime.now() - begin_data_transfer)
+            (datetime.datetime.now() - begin_data_transfer)
 
-        if verbosity > 0 :
+        if verbosity > 0:
             plpy.info(
-                "computation time in this level: " + \
-                str(datetime.datetime.now() - begin_find_best)
-            )
+                ("computation time in this level: " +
+                str(datetime.datetime.now() - begin_find_best)))
     
     __generate_final_tree(madlib_schema, result_tree_table_name)
 
     begin_prune = datetime.datetime.now()
-
     
-    if confidence_level < 100.0 :
+    if confidence_level < 100.0:
         __ebp_prune_tree(madlib_schema, result_tree_table_name)
 
 
-    if validation_table_name is not None :
+    if validation_table_name is not None:
         __rep_prune_tree(
             madlib_schema,
             result_tree_table_name,
-            validation_table_name ,
-            num_classes
-        )
+            validation_table_name,
+            num_classes)
     
     prune_time = datetime.datetime.now() - begin_prune
 
-    if verbosity > 0 :
+    if verbosity > 0:
         plpy.info("time of sampling with replacement: " + str(bld_assoc_time))
         plpy.info(
-            "time of finding best and calculating ACS: " + str(scv_acs_time)
-        )
+            "time of finding best and calculating ACS: " + str(scv_acs_time))
         plpy.info("time of calculating ACC: " + str(calc_acc_time))
         plpy.info("time of Insert/update operation: " + str(ins_upd_time))
         plpy.info("time of pruning: " + str(prune_time))
         plpy.info(
-            "time of training: " + \
-            str(datetime.datetime.now() - begin_func_exec)
-        )
+            ("time of training: " + 
+            str(datetime.datetime.now() - begin_func_exec)))
 
     curstmt = """
-              SELECT COUNT(id) AS count,
-                  max(array_upper(tree_location, 1)) AS max
-              FROM {result_tree_table_name}
-              """.format(result_tree_table_name = result_tree_table_name)
+        SELECT COUNT(id) AS count,
+               max(array_upper(tree_location, 1)) AS max
+        FROM {result_tree_table_name}
+        """.format(result_tree_table_name = result_tree_table_name)
     t = plpy.execute(curstmt)
     ret.num_tree_nodes = int(util.__get_query_value(t, "count"))
     ret.max_tree_depth = int(util.__get_query_value(t, "max"))
 
-    ret.features_per_node   = int(features_per_node)
-    ret.num_of_samples      = int(total_size)
-    ret.calc_acc_time       = calc_acc_time
-    ret.calc_pre_time       = calc_pre_time
-    ret.update_time         = ins_upd_time
-    ret.update_best         = calc_update_best
-    ret.update_child        = calc_update_child
-    ret.update_nid          = calc_update_nid
-    ret.scv_acs_time        = scv_acs_time
-    ret.prune_time          = prune_time
+    ret.features_per_node = int(features_per_node)
+    ret.num_of_samples = int(total_size)
+    ret.calc_acc_time = calc_acc_time
+    ret.calc_pre_time = calc_pre_time
+    ret.update_time = ins_upd_time
+    ret.update_best = calc_update_best
+    ret.update_child = calc_update_child
+    ret.update_nid = calc_update_nid
+    ret.scv_acs_time = scv_acs_time
+    ret.prune_time = prune_time
 
     return ret
 
 
 def __display_node_sfunc(
-    madlib_schema,
-    state       ,
-    depth       ,
-    is_cont     ,
-    feat_name   ,
-    curr_val    ,
-    split_value ,
-    max_prob    ,
-    max_class   ,
-    num_of_samples   
-):
+        madlib_schema,
+        state,
+        depth,
+        is_cont,
+        feat_name,
+        curr_val,
+        split_value,
+        max_prob,
+        max_class,
+        num_of_samples):
     """
     @brief This is a internal function for displaying one tree node in human
            readable format. It is the step function of aggregation named
@@ -1942,48 +1837,46 @@ def __display_node_sfunc(
             readable information for trees.
     """
     ret = ""
-    for index in range(0, depth + 1) :
+    for index in range(0, depth + 1):
         ret += "    "
 
-    if depth > 0 :
+    if depth > 0:
         ret += util.__coalesce(feat_name, "null") + ": "
         """
         For continuous features, there are two splits.
         We will mark curr_val to 1 for '<='. Otherwise,
         we will mark curr_val to 2.
         """
-        if is_cont :
-            if int(curr_val) == 1 :
+        if is_cont:
+            if int(curr_val) == 1:
                 ret += " <= "
-            else :
+            else:
                 ret += " > "
             ret += str(util.__coalesce(split_value, 0)) + " "
-        else :
+        else:
             ret += " = " + util.__coalesce(curr_val, "null") + " "
-    else :
+    else:
         ret += "Root Node"
     
-    ret += " : class(" + util.__coalesce(max_class, "null") + ")   " + \
-           "num_elements(" + str(util.__coalesce(num_of_samples, 0)) + \
-           ")  " + \
-           "predict_prob(" + str(util.__coalesce(max_prob, 0)) + ")"
-
+    ret += (" : class(" + util.__coalesce(max_class, "null") + ")   " + 
+           "num_elements(" + str(util.__coalesce(num_of_samples, 0)) + 
+           ")  " + 
+           "predict_prob(" + str(util.__coalesce(max_prob, 0)) + ")")
     ret += "\n"
 
     # If there exists information, append the information
     # for this node.
-    if state is not None :
+    if state is not None:
         ret = state + ret
-           
+
     return ret
 
     
 def __treemodel_display_with_ordered_aggr(
-    madlib_schema ,
-    tree_table    ,
-    tree_id       ,
-    max_depth   
-):
+        madlib_schema,
+        tree_table,
+        tree_id,
+        max_depth):
     """
     @brief Display the trained model with human readable format. This function
            leverages ordered aggregate to display the tree with only one scan of
@@ -2023,102 +1916,95 @@ def __treemodel_display_with_ordered_aggr(
             parent_split_value      FLOAT8,
             parent_feature_name     TEXT
         ) m4_ifdef(`__GREENPLUM__', `DISTRIBUTED BY (id)');
-        """
-    )
+        """)
 
     # We made a self join for the tree table. For each node, we get the
     # feature information at its parent node so as to display this node.
     curstmt = """
-              INSERT INTO auxiliary_tree_display
-              SELECT m.*,
-                  n.column_name as parent_feature_name
-              FROM
-              (
-                  SELECT * FROM
-                  (
-                      SELECT t1.tid,t1.id, t1.tree_location,
-                          t1.probability, t1.max_class::TEXT,
-                          t1.num_of_samples, t1.parent_id,
-                          t1.tree_location[array_upper(t1.tree_location,1)]
-                          ::TEXT AS curr_value,
-                          t2.feature as parent_feature_id,
-                          t2.is_cont as is_parent_feature_cont,
-                          t2.split_value as parent_split_value
-                      FROM {tree_table} t1 LEFT JOIN {tree_table} t2 ON
-                      (
-                          t1.parent_id = t2.id AND
-                          (coalesce(t1.tid,0)=coalesce(t2.tid,0)) 
-                      ) 
-                  ) l
-                  WHERE l.tid in ({tree_id}) 
-              ) m
-              LEFT JOIN {metatable_name} n
-              ON m.parent_feature_id = n.id;
-              """.format ( 
-                  tree_table = tree_table,
-                  tree_id = ",".join(str(id) for id in tree_id),
-                  metatable_name = metatable_name
-              )
+        INSERT INTO auxiliary_tree_display
+        SELECT m.*,
+               n.column_name as parent_feature_name
+        FROM
+        (
+            SELECT * FROM
+            (
+                SELECT t1.tid,t1.id, t1.tree_location,
+                       t1.probability, t1.max_class::TEXT,
+                       t1.num_of_samples, t1.parent_id,
+                       t1.tree_location[array_upper(t1.tree_location,1)]::TEXT 
+                       AS curr_value,
+                       t2.feature as parent_feature_id,
+                       t2.is_cont as is_parent_feature_cont,
+                       t2.split_value as parent_split_value
+                FROM {tree_table} t1 LEFT JOIN {tree_table} t2 ON
+                (
+                    t1.parent_id = t2.id AND
+                    (coalesce(t1.tid,0)=coalesce(t2.tid,0)) 
+                ) 
+            ) l
+            WHERE l.tid in ({tree_id}) 
+        ) m
+        LEFT JOIN {metatable_name} n
+        ON m.parent_feature_id = n.id;
+        """.format(
+            tree_table = tree_table,
+            tree_id = ",".join(str(id) for id in tree_id),
+            metatable_name = metatable_name)
     plpy.execute(curstmt)
 
     # Get the metatable storing the encoding information of class.
     curstmt = """
-              SELECT column_name,
-                  {madlib_schema}.__regclass_to_text(table_oid) AS table_name
-              FROM  {metatable_name}
-              WHERE column_type = 'c' LIMIT 1
-              """.format(
-                  metatable_name = metatable_name,
-                  madlib_schema = madlib_schema
-              )
+        SELECT column_name,
+               {madlib_schema}.__regclass_to_text(table_oid) AS table_name
+        FROM  {metatable_name}
+        WHERE column_type = 'c' LIMIT 1
+        """.format(
+            metatable_name = metatable_name,
+            madlib_schema = madlib_schema)
     t = plpy.execute(curstmt)
 
     table_name = util.__get_query_value(t, "table_name")
 
-    if table_name is not None :
+    if table_name is not None:
         # Convert back for the class column.
         curstmt = """
-                  UPDATE auxiliary_tree_display n
-                  SET max_class = {madlib_schema}.__to_char(m.fval)
-                  FROM {table_name} m
-                  WHERE m.code = n.max_class::INT
-                  """.format (
-                      madlib_schema = madlib_schema,
-                      table_name = table_name
-                  )
+            UPDATE auxiliary_tree_display n
+            SET max_class = {madlib_schema}.__to_char(m.fval)
+            FROM {table_name} m
+            WHERE m.code = n.max_class::INT
+            """.format(
+                madlib_schema = madlib_schema,
+                table_name = table_name)
         plpy.execute(curstmt)
 
     # Get the metatables storing the encoding information for discrete features.
     curstmt = """
-              SELECT
-                  id,
-                  column_name,
-                  {madlib_schema}.__regclass_to_text(table_oid) as table_name
-              FROM {metatable_name}
-              WHERE NOT is_cont AND column_type='f';
-              """.format(
-                  metatable_name = metatable_name, 
-                  madlib_schema = madlib_schema
-              )
+        SELECT id,
+               column_name,
+               {madlib_schema}.__regclass_to_text(table_oid) as table_name
+        FROM {metatable_name}
+        WHERE NOT is_cont AND column_type='f';
+        """.format(
+            metatable_name = metatable_name, 
+            madlib_schema = madlib_schema)
     result_rec_t = plpy.execute(curstmt)
 
-    for result_rec in result_rec_t :
+    for result_rec in result_rec_t:
         feature_name = result_rec["column_name"]
         table_name = result_rec["table_name"]
         id = result_rec["id"]
         curstmt = """
-                  UPDATE auxiliary_tree_display n
-                  SET curr_value = {madlib_schema}.__to_char(m.fval)
-                  FROM {table_name} m
-                  WHERE m.code::INT = n.curr_value::INT
-                      AND m.fid = {id}
-                      AND n.parent_feature_name = '{feature_name}'
-                  """.format (
-                      feature_name = feature_name,
-                      table_name = table_name,
-                      id = id,
-                      madlib_schema = madlib_schema
-                  )
+            UPDATE auxiliary_tree_display n
+            SET curr_value = {madlib_schema}.__to_char(m.fval)
+            FROM {table_name} m
+            WHERE m.code::INT = n.curr_value::INT AND 
+                  m.fid = {id} AND 
+                  n.parent_feature_name = '{feature_name}'
+            """.format(
+                feature_name = feature_name,
+                table_name = table_name,
+                id = id,
+                madlib_schema = madlib_schema)
         plpy.execute(curstmt)
 
     """
@@ -2128,50 +2014,48 @@ def __treemodel_display_with_ordered_aggr(
     of depth first traversal.
     """
     curstmt = """
-              SELECT tid, 
-                  {madlib_schema}.__display_tree_aggr
-                  (
-                      array_upper(tree_location,1)-1,
-                      is_parent_feature_cont,
-                      parent_feature_name,
-                      curr_value,
-                      parent_split_value,
-                      probability,
-                      max_class,
-                      num_of_samples
-                      order by tree_location
-                  ) AS disp_str
-              FROM auxiliary_tree_display
-              """.format(madlib_schema = madlib_schema)
-    if max_depth is not None :
+        SELECT tid, 
+        {madlib_schema}.__display_tree_aggr
+        (
+            array_upper(tree_location,1)-1,
+            is_parent_feature_cont,
+            parent_feature_name,
+            curr_value,
+            parent_split_value,
+            probability,
+            max_class,
+            num_of_samples
+            order by tree_location
+        ) AS disp_str
+        FROM auxiliary_tree_display
+        """.format(madlib_schema = madlib_schema)
+    if max_depth is not None:
         curstmt += "WHERE array_upper(tree_location,1) - 1 <=" + str(max_depth)
     
     curstmt += "GROUP BY tid ORDER BY tid;"
     result_rec_t = plpy.execute(curstmt)
     
     results = []
-    for result_rec in result_rec_t :
+    for result_rec in result_rec_t:
         result = "\nTree {tid}\n{disp_str}".format(
-                     tid = str(result_rec["tid"]), 
-                     disp_str = result_rec["disp_str"]
-                 )
+            tid = str(result_rec["tid"]), 
+            disp_str = result_rec["disp_str"])
         results.append(result)
 
     return results
 
 
-def __display_tree_no_ordered_aggr (
-    madlib_schema   ,
-    tree_table      ,
-    id              ,
-    feature_id      ,
-    depth           ,
-    is_cont         ,
-    split_value     ,
-    metatable_name  ,
-    max_depth       ,
-    tree_id         
-):
+def __display_tree_no_ordered_aggr(
+        madlib_schema,
+        tree_table,
+        id,
+        feature_id,
+        depth,
+        is_cont,
+        split_value,
+        metatable_name,
+        max_depth,
+        tree_id):
     """
     @brief This is an internal function for displaying the tree in human 
            readable format.It use the depth-first strategy to traverse a 
@@ -2198,99 +2082,137 @@ def __display_tree_no_ordered_aggr (
     @return The text representing the tree with human readable format.
     """
     ret = ""
-    if (id is None) or (id <= 0) :
+    if (id is None) or (id <= 0):
         return ret
 
     curstmt = """
-              SELECT tree_location, feature, is_cont,
-                  split_value, max_class,num_of_samples,probability
-              FROM {tree_table}
-              WHERE id = {id} AND tid = {tree_id}
-              """.format (
-                  tree_table = tree_table,
-                  id = str(id),
-                  tree_id = str(tree_id)
-              )  
+        SELECT tree_location, feature, is_cont,
+               split_value, max_class,num_of_samples,probability
+        FROM {tree_table}
+        WHERE id = {id} AND tid = {tree_id}
+        """.format(
+            tree_table = tree_table,
+            id = str(id),
+            tree_id = str(tree_id))  
     t = plpy.execute(curstmt)
 
-    tree_location    = util.__get_query_value(t,"tree_location")
-    feature          = util.__get_query_value(t,"feature")
-    is_cont          = util.__get_query_value(t,"is_cont")
+    tree_location = util.__get_query_value(t,"tree_location")
+    feature = util.__get_query_value(t,"feature")
+    is_cont = util.__get_query_value(t,"is_cont")
     temp_split_value = util.__get_query_value(t,"temp_split_value")
-    max_class        = util.__get_query_value(t,"max_class")
-    num_of_samples   = util.__get_query_value(t,"num_of_samples")
-    probability      = util.__get_query_value(t,"probability") 
+    max_class = util.__get_query_value(t,"max_class")
+    num_of_samples = util.__get_query_value(t,"num_of_samples")
+    probability = util.__get_query_value(t,"probability") 
 
     curr_value = tree_location[len(tree_location) - 1]
     
-    for index in range(0, depth) :
+    for index in range(0, depth):
         ret += "    "
 
-    if id > tree_id :
+    if id > tree_id:
         ret += preproc.__get_feature_name(
-                   madlib_schema, 
-                   feature_id, 
-                   metatable_name
-               ) + ": "
+            madlib_schema, 
+            feature_id, 
+            metatable_name) + ": "
 
-        if is_cont :
-            if curr_value == 1 :
+        if is_cont:
+            if curr_value == 1:
                 ret += " <= "
-            else :
+            else:
                 ret += " > "
             ret += str(split_value)
-	else :
-	    ret += " = " + preproc.__get_feature_value(
-                           madlib_schema,
-                           feature_id,
-                           curr_value, 
-                           metatable_name
-                       ) 
-    else :
+	else:
+	    ret += " = " + preproc.__get_feature_value( 
+            madlib_schema,
+            feature_id,
+            curr_value, 
+            metatable_name) 
+    else:
         ret += "Root Node "
 
-    ret += " : class(" + \
+    ret += (" : class(" + 
            preproc.__get_class_value(
                madlib_schema,
                max_class,
-               metatable_name
-           ) + ")   " + \
-           "num_elements(" + str(num_of_samples) + ")  " + \
-           "predict_prob(" + str(probability) + ")"
+               metatable_name) + ")   " + 
+           "num_elements(" + str(num_of_samples) + ")  " + 
+           "predict_prob(" + str(probability) + ")")
 
     ret += "\n"
 
-    if (max_depth is not None) and (depth >= max_depth) :
+    if (max_depth is not None) and (depth >= max_depth):
         return ret
 
     curstmt = """
-              SELECT id
-              FROM {tree_table}
-              WHERE parent_id = {id} AND tid = {tree_id}
-              ORDER BY id
-              """.format (
-                  tree_table = tree_table,
-                  id = str(id),
-                  tree_id = str(tree_id)
-              )
+        SELECT id
+        FROM {tree_table}
+        WHERE parent_id = {id} AND tid = {tree_id}
+        ORDER BY id
+        """.format(
+            tree_table = tree_table,
+            id = str(id),
+            tree_id = str(tree_id))
 
     child_nid_t = plpy.execute(curstmt)
 
-    for child_nid in child_nid_t :
-        ret += __display_tree_no_ordered_aggr (
-                   madlib_schema,
-                   tree_table,
-                   child_nid["id"],
-                   feature,
-                   depth + 1,
-                   is_cont,
-                   temp_split_value,
-                   metatable_name,
-                   max_depth,
-                   tree_id
-               )
+    for child_nid in child_nid_t:
+        ret += __display_tree_no_ordered_aggr(
+            madlib_schema,
+            tree_table,
+            child_nid["id"],
+            feature,
+            depth + 1,
+            is_cont,
+            temp_split_value,
+            metatable_name,
+            max_depth,
+            tree_id)
 
     return ret
+
+
+def __treemodel_display_no_ordered_aggr(
+        madlib_schema,
+        tree_table,
+        tree_id,
+        max_depth):
+    """
+    @brief Display the trained model with human readable format. It use the
+           recursive algorithm, which is slower than the version with ordered
+           aggregate. We only use it when ordered aggregate is unavailable.
+
+    @param tree_table   The full name of the tree table.
+    @param tree_id      The array contains the IDs of the trees to be
+                        displayed.
+    @param max_depth    The max depth to be displayed. If it is set to null,
+                        this function will show all levels.
+    """
+    util.__assert_table(tree_table, True)
+    metatable_name = __get_metatable_name(tree_table)
+    display_list = []
+    for id in tree_id:
+        t = plpy.execute(
+            """
+            SELECT id 
+            FROM {tree_table}
+            WHERE parent_id = 0 AND tid = {id}
+            """.format(
+                tree_table = tree_table,
+                id = id))
+        root_id = util.__get_query_value(t, 'id')
+        
+        display = ('\nTree ' + str(id) + '\n' + 
+            __display_tree_no_ordered_aggr(
+                tree_table,
+                root_id,
+                0,
+                0,
+                FALSE,
+                0,
+                metatable_name,
+                max_depth,
+                id))
+        display_list.append(display)
 
 
 def __treemodel_get_vote_result(madlib_schema, src_table, dst_table):
@@ -2310,37 +2232,34 @@ def __treemodel_get_vote_result(madlib_schema, src_table, dst_table):
             class       INT,
             prob        FLOAT8
         )m4_ifdef(`__GREENPLUM__', `DISTRIBUTED BY (id)')
-        """.format(dst_table = dst_table) 
-    )
+        """.format(dst_table = dst_table))
   
     curstmt = """
-              INSERT INTO {dst_table}
-              SELECT id, max_array[3], max_array[2] 
-              FROM
-              (
-                  SELECT id, max(array[count,prob,class]) AS max_array 
-                  FROM
-                  (
-                      SELECT id, class, COUNT(*) AS count, AVG(prob) as prob
-                      FROM {src_table}
-                      GROUP BY id,class
-                  ) t1 
-                  GROUP BY id
-              ) t2
-              """.format(
-                  dst_table = dst_table,
-                  src_table = src_table
-              )
+        INSERT INTO {dst_table}
+        SELECT id, max_array[3], max_array[2] 
+        FROM
+        (
+            SELECT id, max(array[count,prob,class]) AS max_array 
+            FROM
+            (
+                SELECT id, class, COUNT(*) AS count, AVG(prob) as prob
+                FROM {src_table}
+                GROUP BY id,class
+            ) t1 
+            GROUP BY id
+        ) t2
+        """.format(
+            dst_table = dst_table,
+            src_table = src_table)
 
     plpy.execute(curstmt)
 
 
 def __treemodel_classify_internal(
-    madlib_schema,
-    classification_table_name,
-    tree_table_name,
-    verbosity
-):
+        madlib_schema,
+        classification_table_name,
+        tree_table_name,
+        verbosity):
     """
     @brief An internal classification function. It classifies with all trees
            at the same time. For medium/small data sets, tests shows that it 
@@ -2356,54 +2275,46 @@ def __treemodel_classify_internal(
             result table name (We encode the source table during the 
             classification).
     """
-    table_pick         = 1
-    id_col_name        = "id"
-    curr_level         = 1
-    max_level          = 0
-    h2hmv_routine_id   = 0
-    result_table_name  = "dt_classify_internal_rt"
+    table_pick = 1
+    id_col_name = "id"
+    curr_level = 1
+    max_level = 0
+    h2hmv_routine_id = 0
+    result_table_name = "dt_classify_internal_rt"
     encoded_table_name = "dt_classify_internal_edt"
     table_names = ["classified_instance_ping", "classified_instance_pong"]
-    metatable_name     = ""    
+    metatable_name = ""    
 
     time_stamp = datetime.datetime.now()
 
     util.__assert(
         classification_table_name is not None and
         util.__table_exists(madlib_schema, classification_table_name),
-        "the specified classification table <" + 
-        classification_table_name + "> does not exists"
-    )
+        ("the specified classification table <" + 
+        classification_table_name + "> does not exists"))
 
     util.__assert(
         tree_table_name is not None and 
         util.__table_exists(madlib_schema, tree_table_name),
-        "the specified tree table <" + tree_table_name + \
-        "> does not exists"
-    )
-
+        ("the specified tree table <" + tree_table_name + 
+         "> does not exists"))
     util.__assert(verbosity is not None, "verbosity must be non-null") 
-
     plpy.execute(
         """
         DROP TABLE IF EXISTS  {encoded_table_name} CASCADE
-        """.format(encoded_table_name = encoded_table_name)
-    )
-
+        """.format(encoded_table_name = encoded_table_name))
     metatable_name = __get_metatable_name(madlib_schema, tree_table_name)
-
     h2hmv_routine_id = __get_routine_id(madlib_schema, tree_table_name)
 
-    preproc.__encode_table_classify (
+    preproc.__encode_table_classify(
         madlib_schema,
         classification_table_name,
         encoded_table_name,
         metatable_name,
         h2hmv_routine_id,
-        verbosity
-    )
+        verbosity)
 
-    if verbosity > 0 :
+    if verbosity > 0:
         plpy.info("abular format. id_col_name: " + id_col_name)
 
     """
@@ -2416,7 +2327,6 @@ def __treemodel_classify_internal(
     is quite expensive.
     """
     plpy.execute("DROP TABLE IF EXISTS classified_instance_ping")
-
     plpy.execute(
         """
         CREATE TEMP TABLE classified_instance_ping
@@ -2429,11 +2339,9 @@ def __treemodel_classify_internal(
             parent_id   INT,
             leaf_id     INT
         ) m4_ifdef(`__GREENPLUM__', `DISTRIBUTED BY (id)');
-        """
-    )
+        """)
 
     plpy.execute("DROP TABLE IF EXISTS classified_instance_pong")
-
     plpy.execute(
         """
         CREATE TEMP TABLE classified_instance_pong
@@ -2446,11 +2354,9 @@ def __treemodel_classify_internal(
             parent_id   INT,
             leaf_id     INT
         ) m4_ifdef(`__GREENPLUM__', `DISTRIBUTED BY (id)')
-        """
-    )
+        """)
 
     plpy.execute("DROP TABLE IF EXISTS " + result_table_name + " CASCADE")
-
     plpy.execute(
         """
         CREATE TABLE {result_table_name}
@@ -2463,109 +2369,94 @@ def __treemodel_classify_internal(
             parent_id   INT,
             leaf_id     INT
         ) m4_ifdef(`__GREENPLUM__', `DISTRIBUTED BY (id)')
-        """.format(result_table_name = result_table_name)
-    )
+        """.format(result_table_name = result_table_name))
 
     stmt = """
-           INSERT INTO classified_instance_ping (id, jump, class, prob,tid)
-           SELECT m.{id_col_name}, t.id, 0, 0, t.tid
-           FROM {encoded_table_name} m CROSS JOIN
-           (
-               SELECT DISTINCT tid,id 
-               FROM {tree_table_name} 
-               WHERE parent_id = 0
-           ) t
-           """.format (
-               id_col_name = id_col_name,
-               encoded_table_name = encoded_table_name,
-               tree_table_name = tree_table_name
-           )
+        INSERT INTO classified_instance_ping (id, jump, class, prob,tid)
+        SELECT m.{id_col_name}, t.id, 0, 0, t.tid
+        FROM {encoded_table_name} m CROSS JOIN
+        (
+            SELECT DISTINCT tid,id 
+            FROM {tree_table_name} 
+            WHERE parent_id = 0
+        ) t
+        """.format(
+            id_col_name = id_col_name,
+            encoded_table_name = encoded_table_name,
+            tree_table_name = tree_table_name)
     plpy.execute(stmt)
 
     t = plpy.execute(
-            "SELECT max(array_upper(tree_location,1)) AS max FROM " + \
-            tree_table_name
-        )
+        "SELECT max(array_upper(tree_location,1)) AS max FROM " + \
+        tree_table_name)
     max_level = util.__get_query_value(t, "max")
 
-    if max_level is None :
+    if max_level is None:
         plpy.error("tree should not be empty")
 
     for curr_level in xrange(1, max_level + 1):
-        if verbosity > 0 :
+        if verbosity > 0:
             plpy.info("new_depth: " + str(curr_level))
-
         table_pick = table_pick % 2 + 1
-
         plpy.execute("TRUNCATE " + str(table_names[table_pick - 1]))
-        
         t = plpy.execute(
-                "SELECT count(id) as count FROM " + result_table_name
-            )
+            "SELECT count(id) as count FROM " + result_table_name)
         size_finished = util.__get_query_value(t, "count")
-
-        if verbosity > 0 :
+        if verbosity > 0:
             plpy.info("size_finished " + str(size_finished))
-
         t = plpy.execute(
-                "SELECT count(*) AS count FROM " + \
-                table_names[(table_pick) % 2 + 1 - 1]
-            )
+            "SELECT count(*) AS count FROM " + \
+            table_names[(table_pick) % 2 + 1 - 1])
         remains_to_classify = util.__get_query_value(t, "count")
 
-        if remains_to_classify == 0 :
-            if verbosity > 0 :
+        if remains_to_classify == 0:
+            if verbosity > 0:
                 plpy.info(
-                    "size_finished: {size_finished} remains_to_classify: " + \
-                    "{remains_to_classify}".format(
+                    ("size_finished: {size_finished} remains_to_classify: " +
+                     "{remains_to_classify}".format(
                         size_finished = size_finished,
-                        remains_to_classify = remains_to_classify
-                    )         
-                ) 
-
+                        remains_to_classify = remains_to_classify))) 
             break
 
         curstmt = """
-                  INSERT INTO {table1}
-                  SELECT pt.tid, pt.id,
-                  CASE WHEN (is_cont) THEN
-                      CASE WHEN (gt.lmc_nid IS NULL) THEN
-                          0
-                      ELSE
-                          gt.lmc_nid + 
-                          float8lt(gt.split_value, fvals[gt.feature])::INT4 + 
-                          1 - gt.lmc_fval
-                      END
-                  ELSE
-                      CASE WHEN (gt.lmc_nid IS NULL) THEN
-                          0
-                      ELSE
-                          gt.lmc_nid + fvals[gt.feature] - gt.lmc_fval
-                      END
-                  END as newjump, 
-                      gt.max_class, gt.probability, gt.parent_id, gt.id
-                  FROM
-                  (
-                      SELECT t1.tid, t1.id, t1.jump, fvals
-                      FROM {table2} t1
-                      LEFT JOIN {encoded_table_name} t2
-                      ON t1.id = t2.id
-                  )  AS pt,
-                  (
-                      SELECT tid,lmc_nid, lmc_fval, max_class,feature, 
-                          probability, parent_id, id, is_cont, split_value
-                      FROM {tree_table_name}
-                      WHERE array_upper(tree_location,1) = {curr_level}
-                  ) AS gt
-                  WHERE pt.jump = gt.id AND pt.tid=gt.tid
-                  """.format (
-                      table1 = table_names[table_pick - 1],
-                      table2 = table_names[(table_pick) % 2 + 1 -1],
-                      encoded_table_name = encoded_table_name,
-                      tree_table_name = tree_table_name,
-                      curr_level = curr_level
-                  )
-                    
+            INSERT INTO {table1}
+            SELECT pt.tid, pt.id,
+                   CASE WHEN (is_cont) THEN
+                        CASE WHEN (gt.lmc_nid IS NULL) THEN 0
+                             ELSE
+                                  gt.lmc_nid + 
+                                  float8lt
+                                  (
+                                      gt.split_value, fvals[gt.feature]
+                                  )::INT4 + 1 - gt.lmc_fval
+                        END
+                        ELSE
+                             CASE WHEN (gt.lmc_nid IS NULL) THEN 0
+                                  ELSE
+                                       gt.lmc_nid + fvals[gt.feature] - 
+                                       gt.lmc_fval
+                        END
+                   END as newjump, 
+                   gt.max_class, gt.probability, gt.parent_id, gt.id
+            FROM
+            (
+                SELECT t1.tid, t1.id, t1.jump, fvals
+                FROM {table2} t1
+                LEFT JOIN {encoded_table_name} t2 ON t1.id = t2.id
+            )  AS pt,
+            (
+                SELECT tid, lmc_nid, lmc_fval, max_class,feature, 
+                       probability, parent_id, id, is_cont, split_value
+                FROM {tree_table_name}
+                WHERE array_upper(tree_location,1) = {curr_level}
+            ) AS gt
+            WHERE pt.jump = gt.id AND pt.tid = gt.tid
+            """.format(
+                table1 = table_names[table_pick - 1],
+                table2 = table_names[(table_pick) % 2 + 1 -1],
+                encoded_table_name = encoded_table_name,
+                tree_table_name = tree_table_name,
+                curr_level = curr_level)
         plpy.execute(curstmt)
         
         """
@@ -2574,46 +2465,41 @@ def __treemodel_classify_internal(
         (be classified to max_class of its corrsponding node)
         """
         ts = plpy.execute("SELECT DISTINCT tid FROM " + tree_table_name)
-        for ts_r in ts :
+        for ts_r in ts:
             tree_id = ts_r.get("tid")
-
             curstmt = """
-                      INSERT INTO {result_table_name}
-                      (
-                          tid,id, jump, class, prob, parent_id, leaf_id
-                      )
-                      SELECT tid,id, 0, class, prob, parent_id, leaf_id
-                      FROM {table_name}
-                      WHERE jump NOT IN 
-                      (
-                          SELECT id 
-                          FROM {tree_table_name} 
-                          WHERE tid={tree_id}
-                      )
-                      AND tid={tree_id}
-                      """.format(
-                          result_table_name = result_table_name,
-                          table_name = table_names[table_pick - 1],
-                          tree_table_name = tree_table_name,
-                          tree_id = tree_id
-                      )
+                INSERT INTO {result_table_name}
+                (
+                    tid,id, jump, class, prob, parent_id, leaf_id
+                )
+                SELECT tid,id, 0, class, prob, parent_id, leaf_id
+                FROM {table_name}
+                WHERE jump NOT IN 
+                (
+                    SELECT id 
+                    FROM {tree_table_name} 
+                    WHERE tid={tree_id}
+                ) AND tid={tree_id}
+                """.format(
+                    result_table_name = result_table_name,
+                    table_name = table_names[table_pick - 1],
+                    tree_table_name = tree_table_name,
+                    tree_id = tree_id)
             plpy.execute(curstmt)
 
             # delete from the being classified data table
             curstmt = """
-                      DELETE FROM {table_name}
-                      WHERE jump NOT IN 
-                      (
-                          SELECT id 
-                          FROM {tree_table_name} 
-                          WHERE tid={tree_id}
-                      )
-                      AND tid={tree_id}
-                      """.format(
-                          table_name = table_names[table_pick - 1],
-                          tree_table_name = tree_table_name,
-                          tree_id = tree_id
-                      )
+                DELETE FROM {table_name}
+                WHERE jump NOT IN 
+                (
+                    SELECT id 
+                    FROM {tree_table_name} 
+                    WHERE tid={tree_id}
+                ) AND tid={tree_id}
+                """.format(
+                    table_name = table_names[table_pick - 1],
+                    tree_table_name = tree_table_name,
+                    tree_id = tree_id)
             plpy.execute(curstmt)
 
     plpy.execute(
@@ -2624,9 +2510,7 @@ def __treemodel_classify_internal(
         WHERE jump = 0
         """.format(
             result_table_name = result_table_name,
-            table_name = table_names[table_pick - 1]
-        )
-    )
+            table_name = table_names[table_pick - 1]))
     
     plpy.execute(
         """
@@ -2636,25 +2520,21 @@ def __treemodel_classify_internal(
         WHERE jump = 0
         """.format(
             result_table_name = result_table_name,
-            table_name = table_names[table_pick % 2 + 1 - 1]
-        )
-    )
+            table_name = table_names[table_pick % 2 + 1 - 1]))
     
-    if verbosity > 0 :
+    if verbosity > 0:
         plpy.info(
             "final classification time:" + \
-            str(datetime.datetime.now() - time_stamp)
-        )
+            str(datetime.datetime.now() - time_stamp))
 
     return [encoded_table_name, result_table_name]
 
 
-def __treemodel_classify_internal_serial (
-    madlib_schema               ,
-    classification_table_name   ,
-    tree_table_name             ,
-    verbosity                   
-):
+def __treemodel_classify_internal_serial(
+        madlib_schema,
+        classification_table_name,
+        tree_table_name,
+        verbosity):
     """
     @brief An internal classification function. It classifies with one tree
            after another. For large data sets, tests shows that it is more
@@ -2680,23 +2560,20 @@ def __treemodel_classify_internal_serial (
 
     time_stamp = datetime.datetime.now()
 
-    util.__assert (
+    util.__assert(
         (classification_table_name is not None) and 
         util.__table_exists(madlib_schema, classification_table_name),
-        "the specified classification table <" + classification_table_name + \
-        "> does not exists"
-    )
+        ("the specified classification table <" + classification_table_name + 
+        "> does not exists"))
  
-    util.__assert (
+    util.__assert(
         (tree_table_name is not None) and 
         util.__table_exists(madlib_schema, tree_table_name),
-        "the specified tree table <" + tree_table_name + "> does not exists"
-    )
+        "the specified tree table <" + tree_table_name + "> does not exists")
 
-    util.__assert (
+    util.__assert(
         verbosity is not None,
-        "verbosity must be non-null"
-    )
+        "verbosity must be non-null")
 
     plpy.execute("DROP TABLE IF EXISTS " + encoded_table_name + " CASCADE")
 
@@ -2704,16 +2581,15 @@ def __treemodel_classify_internal_serial (
 
     h2hmv_routine_id = __get_routine_id(madlib_schema, tree_table_name)
 
-    preproc.__encode_table_classify (
+    preproc.__encode_table_classify(
         madlib_schema,
         classification_table_name,
         encoded_table_name,
         metatable_name,
         h2hmv_routine_id,
-        verbosity
-    )
+        verbosity)
 
-    if verbosity > 0 :
+    if verbosity > 0:
         plpy.info("tabular format. id_col_name: " + str(id_col_name))
     """
     The table of classified_instance_ping and classified_instance_pong are
@@ -2737,8 +2613,7 @@ def __treemodel_classify_internal_serial (
             parent_id   INT,
             leaf_id     INT
         ) m4_ifdef(`__GREENPLUM__', `DISTRIBUTED BY (id)')
-        """
-    )
+        """)
 
     plpy.execute("DROP TABLE IF EXISTS classified_instance_pong")
 
@@ -2753,8 +2628,7 @@ def __treemodel_classify_internal_serial (
             parent_id   INT,
             leaf_id     INT
         ) m4_ifdef(`__GREENPLUM__', `DISTRIBUTED BY (id)')
-        """
-    )
+        """)
 
     plpy.execute("DROP TABLE IF EXISTS " + result_table_name + " CASCADE")
 
@@ -2770,56 +2644,50 @@ def __treemodel_classify_internal_serial (
             parent_id   INT,
             leaf_id     INT
         ) m4_ifdef(`__GREENPLUM__', `DISTRIBUTED BY (id)')
-        """.format(result_table_name = result_table_name)
-    )
+        """.format(result_table_name = result_table_name))
 
     t = plpy.execute("SELECT DISTINCT tid FROM " + tree_table_name)
     
-    for r in t :
+    for r in t:
         tree_id = r["tid"]
         t = plpy.execute(
-                """
-                SELECT max(array_upper(tree_location,1)) AS max
-                FROM {tree_table_name}
-                where tid = {tree_id}
-                """.format(
-                    tree_table_name = tree_table_name, 
-                    tree_id = tree_id
-                )
-            )
+            """
+            SELECT max(array_upper(tree_location,1)) AS max
+            FROM {tree_table_name}
+            where tid = {tree_id}
+            """.format(
+                tree_table_name = tree_table_name, 
+                tree_id = tree_id))
         max_level = util.__get_query_value(t, "max")
      
-        if max_level is None :
+        if max_level is None:
             plpy.error("tree should not be empty")
 
         plpy.execute("TRUNCATE classified_instance_ping")
         plpy.execute("TRUNCATE classified_instance_pong")
 
         t = plpy.execute(
-                """
-                SELECT id FROM {tree_table_name}
-                WHERE parent_id = 0 AND tid={tid}
-                """.format(
-                    tree_table_name = tree_table_name,
-                    tid = tree_id
-                )
-            )
+            """
+            SELECT id FROM {tree_table_name}
+            WHERE parent_id = 0 AND tid={tid}
+            """.format(
+                tree_table_name = tree_table_name,
+                tid = tree_id))
         root_id = util.__get_query_value(t, "id")
 
         curstmt = """
-                  INSERT INTO classified_instance_ping (id, jump, class, prob)
-                  SELECT {id_col_name}, {root_id}, 0, 0 
-                  FROM {encoded_table_name}
-                  """.format (
-                      id_col_name = id_col_name,
-                      root_id = root_id,
-                      encoded_table_name = encoded_table_name
-                  )
+            INSERT INTO classified_instance_ping (id, jump, class, prob)
+            SELECT {id_col_name}, {root_id}, 0, 0 
+            FROM {encoded_table_name}
+            """.format(
+                id_col_name = id_col_name,
+                root_id = root_id,
+                encoded_table_name = encoded_table_name)
         plpy.execute(curstmt)
 
         table_pick = 1
-        for curr_level in range(1, max_level + 1) :
-            if verbosity > 0 :
+        for curr_level in range(1, max_level + 1):
+            if verbosity > 0:
                 plpy.info("new_depth: " + str(curr_level))
 
             table_pick = table_pick % 2 + 1
@@ -2827,77 +2695,69 @@ def __treemodel_classify_internal_serial (
             plpy.execute("TRUNCATE " + str(table_names[table_pick - 1]))
 
             t = plpy.execute(
-                "SELECT count(id) AS count FROM " + result_table_name
-                )
+                "SELECT count(id) AS count FROM " + result_table_name)
             size_finished = util.__get_query_value(t, "count")
 
-            if verbosity > 0 :
+            if verbosity > 0:
                 plpy.info("size_finished  " + str(size_finished))
 
             # table_names[(table_pick) % 2 + 1 - 1], as ARRAY in pgsql starts
             # index 1, and list in python starts index 0
             t = plpy.execute(
-                    "SELECT count(*) AS count FROM " + \
-                    table_names[(table_pick) % 2 + 1 - 1]
-                )
+                "SELECT count(*) AS count FROM " + \
+                table_names[(table_pick) % 2 + 1 - 1])
             remains_to_classify = util.__get_query_value(t, "count")
 
-            if remains_to_classify == 0 :
-                if verbosity > 0 :
+            if remains_to_classify == 0:
+                if verbosity > 0:
                     plpy.info(
                         "size_finished: " + str(size_finished) + \
                         " remains_to_classify: " + \
-                        str(remains_to_classify)
-                    )
-            
+                        str(remains_to_classify))
                 break
             
             curstmt = """
-                      INSERT INTO {table1}
-                      SELECT pt.id,
-                          CASE WHEN (is_cont) THEN
-                              CASE WHEN (gt.lmc_nid IS NULL) THEN
-                                  0
-                              ELSE
-                                  gt.lmc_nid +
-                                  float8lt
-                                  (
-                                      gt.split_value, fvals[gt.feature]
-                                  )::INT4
-                                  + 1 - gt.lmc_fval
-                              END
-                          ELSE
-                              CASE WHEN (gt.lmc_nid IS NULL) THEN
-                                  0
-                              ELSE
-                                  gt.lmc_nid + fvals[gt.feature] - gt.lmc_fval
-                              END
-                          END as newjump,
-                          gt.max_class, gt.probability, gt.parent_id, gt.id
-                      FROM
-                      (
-                          SELECT t1.id, t1.jump, fvals
-                          FROM {table2} t1
-                          LEFT JOIN {encoded_table_name} t2
-                          ON t1.id = t2.id
-                      ) AS pt,
-                      ( 
-                          SELECT  lmc_nid, lmc_fval, max_class, feature, 
-                              probability,
-                          parent_id, id, is_cont, split_value
-                          FROM {tree_table_name}
-                          WHERE array_upper(tree_location, 1) = {curr_level} 
-                              AND tid = {tree_id}
-                      ) AS gt
-                      WHERE pt.jump = gt.id
-                      """.format (
-                          table1 = table_names[table_pick - 1],
-                          table2 = table_names[(table_pick) % 2 + 1 - 1],
-                          encoded_table_name = encoded_table_name,
-                          tree_table_name = tree_table_name,
-                          curr_level = curr_level,
-                          tree_id = tree_id
-                      )
+                INSERT INTO {table1}
+                SELECT pt.id,
+                       CASE WHEN (is_cont) THEN
+                            CASE WHEN (gt.lmc_nid IS NULL) THEN 0
+                                 ELSE gt.lmc_nid +
+                                      float8lt
+                                      (
+                                          gt.split_value, fvals[gt.feature]
+                                      )::INT4
+                                      + 1 - gt.lmc_fval
+                                 END
+                            ELSE
+                                 CASE WHEN (gt.lmc_nid IS NULL) THEN 0
+                                      ELSE gt.lmc_nid + fvals[gt.feature] - 
+                                           gt.lmc_fval
+                                      END
+                                 END as newjump,
+                       gt.max_class, gt.probability, gt.parent_id, gt.id
+                FROM
+                (
+                    SELECT t1.id, t1.jump, fvals
+                    FROM {table2} t1
+                    LEFT JOIN {encoded_table_name} t2
+                    ON t1.id = t2.id
+                ) AS pt,
+                ( 
+                    SELECT  lmc_nid, lmc_fval, max_class, feature, 
+                            probability,
+                            parent_id, id, is_cont, split_value
+                    FROM {tree_table_name}
+                    WHERE array_upper(tree_location, 1) = {curr_level} AND 
+                          tid = {tree_id}
+                ) AS gt
+                WHERE pt.jump = gt.id
+                """.format(
+                    table1 = table_names[table_pick - 1],
+                    table2 = table_names[(table_pick) % 2 + 1 - 1],
+                    encoded_table_name = encoded_table_name,
+                    tree_table_name = tree_table_name,
+                    curr_level = curr_level,
+                    tree_id = tree_id)
             plpy.execute(curstmt)
 
             """
@@ -2906,75 +2766,69 @@ def __treemodel_classify_internal_serial (
             (be classified to max_class of its corrsponding node)
             """
             curstmt = """
-                      INSERT INTO {result_table_name}
-                      (
-                          tid,id, jump, class, prob, parent_id, leaf_id
-                      )
-                      SELECT {tree_id},id, 0, class, prob, parent_id, leaf_id
-                      FROM {table_pick_name}
-                      WHERE jump NOT IN 
-                      (
-                          SELECT id FROM {tree_table_name} WHERE tid = {tree_id}
-                      )
-                      """.format (
-                          result_table_name = result_table_name,
-                          table_pick_name = table_names[table_pick - 1],
-                          tree_table_name = tree_table_name,
-                          tree_id = tree_id
-                      )
+                INSERT INTO {result_table_name}
+                (
+                    tid,id, jump, class, prob, parent_id, leaf_id
+                )
+                SELECT {tree_id},id, 0, class, prob, parent_id, leaf_id
+                FROM {table_pick_name}
+                WHERE jump NOT IN 
+                (
+                    SELECT id FROM {tree_table_name} WHERE tid = {tree_id}
+                )
+                """.format(
+                    result_table_name = result_table_name,
+                    table_pick_name = table_names[table_pick - 1],
+                    tree_table_name = tree_table_name,
+                    tree_id = tree_id)
             plpy.execute(curstmt)
 
             # delete from the being classified data table
             curstmt = """
-                      DELETE FROM {table_pick_name}
-                      WHERE jump NOT IN 
-                      (
-                          SELECT id FROM {tree_table_name} WHERE tid = {tree_id}
-                      )
-                      """.format (
-                          table_pick_name = table_names[table_pick - 1],
-                          tree_table_name = tree_table_name,
-                          tree_id = tree_id   
-                      )
+                DELETE FROM {table_pick_name}
+                WHERE jump NOT IN 
+                (
+                    SELECT id FROM {tree_table_name} WHERE tid = {tree_id}
+                )
+                """.format(
+                    table_pick_name = table_names[table_pick - 1],
+                    tree_table_name = tree_table_name,
+                    tree_id = tree_id)
             plpy.execute(curstmt)
 
         curstmt = """
-                  INSERT INTO {result_table_name} 
-                  SELECT {tree_id}, * 
-                  FROM {table_pick_name} WHERE jump = 0
-                  """.format (
-                      result_table_name = result_table_name,
-                      tree_id = tree_id,
-                      table_pick_name = table_names[table_pick - 1] 
-                  )
+            INSERT INTO {result_table_name} 
+            SELECT {tree_id}, * 
+            FROM {table_pick_name} WHERE jump = 0
+            """.format(
+                result_table_name = result_table_name,
+                tree_id = tree_id,
+                table_pick_name = table_names[table_pick - 1])
         plpy.execute(curstmt)
 
         curstmt = """
-                  INSERT INTO {result_table_name} 
-                  SELECT {tree_id}, * 
-                  FROM {table_pick_name} WHERE jump = 0
-                  """.format (
-                      result_table_name = result_table_name,
-                      tree_id = tree_id,
-                      table_pick_name = table_names[table_pick % 2 + 1 - 1]
-                  )
+            INSERT INTO {result_table_name} 
+            SELECT {tree_id}, * 
+            FROM {table_pick_name} WHERE jump = 0
+            """.format(
+                result_table_name = result_table_name,
+                tree_id = tree_id,
+                table_pick_name = table_names[table_pick % 2 + 1 - 1])
         plpy.execute(curstmt)
 
-    if verbosity > 0 :
+    if verbosity > 0:
         plpy.info(
             "final classification time: " + \
-            str(datetime.datetime.now() - time_stamp)
-        )
+            str(datetime.datetime.now() - time_stamp))
 
     return [encoded_table_name, result_table_name]
 
 
-def __treemodel_score (
-    madlib_schema               ,
-    tree_table_name             ,
-    scoring_table_name          ,
-    verbosity                   
-):
+def __treemodel_score(
+        madlib_schema,
+        tree_table_name,
+        scoring_table_name,
+        verbosity):
     """
     @brief This function check the accuracy of the trained tree model.
 
@@ -2992,45 +2846,38 @@ def __treemodel_score (
     table_names = []
     encoded_table_name = ""    
 
-    if verbosity > 0 :
+    if verbosity > 0:
         # get rid of the messages whose severity level is lower than 'WARNING'
         plpy.execute("SET client_min_messages = WARNING")
 
     util.__assert(
         tree_table_name is not None and 
         util.__table_exists(madlib_schema, tree_table_name),
-        "the specified tree table <" + \
-        tree_table_name              + \
-        "> does not exist"
-    )
+        ("the specified tree table <" + 
+        tree_table_name + 
+        "> does not exist"))
 
     util.__assert(
         scoring_table_name is not None and
         util.__table_exists(madlib_schema, scoring_table_name),
-        "the specified scoring table <" + \
-        str(scoring_table_name)         + \
-        "> does not exist"
-    )
+        ("the specified scoring table <" + 
+        str(scoring_table_name) + 
+        "> does not exist"))
 
     util.__assert(
         util.__column_exists(
             madlib_schema, scoring_table_name, 
             preproc.__get_class_column_name(
                 madlib_schema, __get_metatable_name( 
-                    madlib_schema, tree_table_name
-                )
-            )
-        ),
-        "the specified scoring table <" + scoring_table_name + \
-        "> does not have class column"
-    )
+                    madlib_schema, tree_table_name))),
+        ("the specified scoring table <" + scoring_table_name + 
+        "> does not have class column"))
 
     table_names = __treemodel_classify_internal(
-                      madlib_schema,
-                      scoring_table_name, 
-                      tree_table_name,
-                      verbosity
-                  )
+        madlib_schema,
+        scoring_table_name, 
+        tree_table_name,
+        verbosity)
 
     encoded_table_name = table_names[0]
     result_table_name = table_names[1]
@@ -3039,8 +2886,7 @@ def __treemodel_score (
     __treemodel_get_vote_result(
         madlib_schema,
         result_table_name, 
-        result_table_name_final
-    )
+        result_table_name_final)
 
     curstmt = "SELECT count(id) AS count FROM " + result_table_name_final    
  
@@ -3048,15 +2894,14 @@ def __treemodel_score (
     num_of_row = util.__get_query_value(t, "count")
 
     curstmt = """
-              SELECT count(t2.id) AS count
-              FROM {encoded_table_name} t1, {result_table_name_final} t2
-              WHERE t1.{id_col_name} = t2.id AND t1.{class_col_name} <> t2.class
-              """.format (
-                  encoded_table_name = encoded_table_name,
-                  result_table_name_final = result_table_name_final, 
-                  id_col_name = id_col_name,
-                  class_col_name = class_col_name
-              )
+        SELECT count(t2.id) AS count
+        FROM {encoded_table_name} t1, {result_table_name_final} t2
+        WHERE t1.{id_col_name} = t2.id AND t1.{class_col_name} <> t2.class
+        """.format(
+            encoded_table_name = encoded_table_name,
+            result_table_name_final = result_table_name_final, 
+            id_col_name = id_col_name,
+            class_col_name = class_col_name )
 
     t = plpy.execute(curstmt)
     mis_of_row = util.__get_query_value(t, "count")
@@ -3068,10 +2913,9 @@ def __treemodel_score (
     return float(num_of_row - mis_of_row) / num_of_row
 
 
-def __treemodel_clean (
-    madlib_schema,
-    model_table_name
-):
+def __treemodel_clean(
+        madlib_schema,
+        model_table_name):
     """
     @brief Cleanup the trained model table and any relevant tables.
 
@@ -3084,80 +2928,71 @@ def __treemodel_clean (
     plpy.execute("SET client_min_messages = WARNING")
 
     t = plpy.execute(
-            """
-            SELECT {madlib_schema}.__table_exists('{model_table_name}') 
-                AS existence
-            """.format(
-                madlib_schema = madlib_schema,
-                model_table_name = model_table_name
-            )
-        )
-    util.__assert (
+        """
+        SELECT {madlib_schema}.__table_exists('{model_table_name}') AS existence
+        """.format(
+            madlib_schema = madlib_schema,
+            model_table_name = model_table_name))
+    util.__assert(
         model_table_name is not None and 
         util.__get_query_value(t, "existence"),
-        "the specified tree table <" + model_table_name + "> does not exists"
-    )   
+        "the specified tree table <" + model_table_name + "> does not exists")   
 
     t = plpy.execute(
-            """
-            SELECT {madlib_schema}.__table_exists
-            (
-                '{madlib_schema}.training_info'
-            ) AS existence
-            """.format(madlib_schema = madlib_schema)
-        )
+        """
+        SELECT {madlib_schema}.__table_exists
+        (
+            '{madlib_schema}.training_info'
+        ) AS existence
+        """.format(madlib_schema = madlib_schema))
     table_exists = util.__get_query_value(t, "existence")
     
-    if table_exists :
+    if table_exists:
         metatable_name = __get_metatable_name(madlib_schema, model_table_name)
 
-        if metatable_name is not None :
+        if metatable_name is not None:
             t = plpy.execute(
-                    """
-                    SELECT count(*) AS count
-                    FROM {madlib_schema}.training_info
-                    WHERE training_metatable_oid = '{metatable_name}'::regclass
-                    """.format(
-                        madlib_schema = madlib_schema, 
-                        metatable_name = metatable_name
-                    )
-                )
+                """
+                SELECT count(*) AS count
+                FROM {madlib_schema}.training_info
+                WHERE training_metatable_oid = '{metatable_name}'::regclass
+                """.format(
+                    madlib_schema = madlib_schema, 
+                    metatable_name = metatable_name))
             ref_count = util.__get_query_value(t, "count")
 
             # if the metatable is not referenced by other training procedure.
-            if ref_count == 1 :
+            if ref_count == 1:
                 preproc.__drop_metatable(madlib_schema, metatable_name)
                 plpy.execute(
                     "DROP TABLE IF EXISTS " + \
-                    __get_encode_table_name(madlib_schema, model_table_name)
-                )
+                    __get_encode_table_name(madlib_schema, model_table_name))
 
         # remove the record first, and then drop the table
         __delete_traininginfo(madlib_schema, model_table_name)
         
         plpy.execute("DROP TABLE IF EXISTS " + model_table_name)
-    else :
+    else:
         plpy.execute("DROP TABLE IF EXISTS " + model_table_name)
 
     return True
 
  
-def __check_dt_common_params (
-    madlib_schema               ,
-    split_criterion             ,
-    training_table_name         ,
-    result_table_name           ,
-    continuous_feature_names    ,
-    feature_col_names           ,
-    id_col_name                 ,
-    class_col_name              ,
-    how2handle_missing_value    ,
-    max_tree_depth              ,
-    node_prune_threshold        ,
-    node_split_threshold        ,
-    verbosity                   ,
-    error_msg                   
-):
+def __check_dt_common_params(
+        madlib_schema,
+        split_criterion,
+        training_table_name,
+        result_table_name,
+        continuous_feature_names,
+        feature_col_names,
+        id_col_name,
+        class_col_name,
+        how2handle_missing_value,
+        max_tree_depth,
+        node_prune_threshold,
+        node_split_threshold,
+        verbosity,
+        error_msg):
     """
     @brief Validate the common parameters for C4.5 and RF API.
 
@@ -3214,94 +3049,82 @@ def __check_dt_common_params (
                                      result_table_name is invalid.
     """
     util.__assert(
-        split_criterion is not None             and
+        split_criterion is not None and
         (
             split_criterion == 'infogain' or 
             split_criterion == 'gainratio' or 
             split_criterion == 'gini'
         ),
-        "split_criterion must be infogain, gainratio or gini"
-    )
+        "split_criterion must be infogain, gainratio or gini")
 
     util.__assert(
-        how2handle_missing_value == 'ignore'    or 
+        how2handle_missing_value == 'ignore' or 
         how2handle_missing_value == 'explicit',
-        "how2handle_missing_value must be ignore or explicit!"
-    )
+        "how2handle_missing_value must be ignore or explicit!")
 
     util.__assert(
-        node_prune_threshold is not None        and 
-        node_prune_threshold >= 0.0             and 
+        node_prune_threshold is not None and 
+        node_prune_threshold >= 0.0 and 
         node_prune_threshold <= 1.0,
-        "node_prune_threshold value must be in range from 0 to 1"
-    )
+        "node_prune_threshold value must be in range from 0 to 1")
 
     util.__assert(
-        node_split_threshold is not None        and 
-        node_split_threshold >= 0.0             and 
+        node_split_threshold is not None and 
+        node_split_threshold >= 0.0 and 
         node_split_threshold <= 1.0,
-        "node_split_threshold value must be in range from 0 to 1"
-    )
+        "node_split_threshold value must be in range from 0 to 1")
 
     util.__assert(verbosity is not None, "verbosity must be non-null")
 
     util.__assert(
-        id_col_name is not None                 and 
-        class_col_name is not None              and 
-        len(id_col_name.strip()) > 0            and 
+        id_col_name is not None and 
+        class_col_name is not None and 
+        len(id_col_name.strip()) > 0 and 
         len(class_col_name.strip()) > 0,
-        "invalid id column name or class column name"
-    )
+        "invalid id column name or class column name")
 
     util.__assert(
-        training_table_name is not None         and 
+        training_table_name is not None and 
         util.__table_exists(madlib_schema, training_table_name),
         ("the specified training table <{training_table_name}> " + \
         "does not exist").format(
-            training_table_name = training_table_name
-        )
-    )
+            training_table_name = training_table_name))
 
     util.__assert(
         result_table_name is not None,
         "the specified result " + error_msg + \
-        " table name is NULL"    
-    )
+        " table name is NULL")
 
     util.__assert(
         not util.__table_exists(madlib_schema, result_table_name),
         "the specified result " + error_msg + " table<" + \
-        result_table_name + "> exists"
-    )
+        result_table_name + "> exists")
 
         
 def __gen_enc_meta_names(
-    madlib_schema, 
-    result_table_name,
-    error_msg
-):
+        madlib_schema, 
+        result_table_name,
+        error_msg):  
     """
     @brief Get the name of the encoded table and the name of
-    its meta table.
+           its meta table.
     @param result_table_name   The name of the table where the
-    resulting DT will be kept
+                               resulting DT will be kept
     @param error_msg           The reported error message when the
-    length of result schema name plus
-    the length of result table name is
-    larger than 58.
+                               length of result schema name plus
+                               the length of result table name is
+                               larger than 58.
     @return A text array that contains two elements. The firest element
-    is the encoded table name and the second is the meta table name.
+            is the encoded table name and the second is the meta table name.
     """
     table_names = ["", ""]
     t = plpy.execute(
-            """
-            SELECT {madlib_schema}.__get_schema_name
-            ('{result_table_name}') AS schema_name         
-            """.format(
-                madlib_schema = madlib_schema,
-                result_table_name = result_table_name
-            )
-        )
+        """
+        SELECT {madlib_schema}.__get_schema_name
+        ('{result_table_name}') AS schema_name         
+        """.format(
+            madlib_schema = madlib_schema,
+            result_table_name = result_table_name))
 
     result_schema_name = util.__get_query_value(t, "schema_name")
 
@@ -3314,40 +3137,25 @@ def __gen_enc_meta_names(
     """
     util.__assert(
         len(result_schema_name + "_" + result_table_name) <= 58,
-        "the maximum length of '" + error_msg + "' is 58"
-    )
+        "the maximum length of '" + error_msg + "' is 58")
 
     # the encoded table and meta table will be under the specified schema
     table_names[0] = result_schema_name + "." + \
-            result_table_name.replace(".", "_") + "_ed"
+        result_table_name.replace(".", "_") + "_ed"
     table_names[1] = result_schema_name + "." + \
-            result_table_name.replace(".", "_") + "_di"
+        result_table_name.replace(".", "_") + "_di"
    
     return table_names
 
 
-# -------------------------------------------
-# @brief Validate if the provided columns are in the training table or not.
-#
-# @param training_table_name       The name of the table/view with the source data.
-# @param continuous_feature_names  A text array that contains all the continuous
-#                                  features' names.
-# @param feature_col_names         A text array that contains all the features' names.
-# @param id_col_name               The name of the column containing an ID for each record.
-# @param class_col_name            The name of the column containing the labeled class.
-# @param features_per_node         The number of features to be considered when finding
-#                                                                      a best split.
-#
-# -------------------------------------------
 def __check_training_table(
-    madlib_schema               ,
-    training_table_name         ,
-    continuous_feature_names    ,
-    feature_col_names           ,
-    id_col_name                 ,
-    class_col_name              ,
-    features_per_node           
-):
+        madlib_schema,
+        training_table_name,
+        continuous_feature_names,
+        feature_col_names,
+        id_col_name,
+        class_col_name,
+        features_per_node):
     """
     @brief Validate if the provided columns are in the training table or not.
     
@@ -3368,141 +3176,80 @@ def __check_training_table(
         util.__column_exists(
             madlib_schema,
             training_table_name,
-            id_col_name.strip().lower()
-        ), 
+            id_col_name.strip().lower()), 
         "the specified training table <" +training_table_name + \
-        "> does not have column " + id_col_name
-    )
+        "> does not have column " + id_col_name)
 
     util.__assert(
         util.__column_exists(
             madlib_schema,
             training_table_name,
-            class_col_name.strip().lower()
-        ), 
+            class_col_name.strip().lower()), 
         "the specified training table <" +training_table_name + \
-        "> does not have column " + class_col_name
-    )
+        "> does not have column " + class_col_name)
 
-    if feature_col_names is None :
+    if feature_col_names is None:
         # 2 means the id and class column
         util.__assert(
             features_per_node is None or
             preproc.__num_of_columns(
                 madlib_schema, 
-                training_table_name
-            ) - 2 >= features_per_node,
+                training_table_name) - 2 >= features_per_node,
             "the value of features_per_node must be less than or " + \
-            "equal to the total number of features of the training table"
-        )
+            "equal to the total number of features of the training table")
 
         util.__assert(
             util.__columns_in_table(
                 madlib_schema,
                 continuous_feature_names,
-                training_table_name
-            ),
+                training_table_name),
             "each feature in continuous_feature_names must be a " + \
-            "column of the training table"
-        )
-    else :
+            "column of the training table")
+    else:
         util.__assert(
             features_per_node is None or 
             len(feature_col_names) >= features_per_node,
             "the value of features_per_node must be less than or " + \
-            "equal to the total number of features of the training table"
-        )
+            "equal to the total number of features of the training table")
 
         util.__assert(
             util.__columns_in_table(
                 madlib_schema,
                 feature_col_names,
-                training_table_names,
-            ),
+                training_table_names),
             "each feature in feature_col_names must be a " + \
-            "column of the training table"
-        )
+            "column of the training table")
 
         util.__assert(
             set(continuous_feature_names) <= set(feature_col_names),
             "each feature in continuous_feature_names must be in the" + \
-            " feature_col_names"            
-        )
+            " feature_col_names"            )
 
 
-# -------------------------------------------
-# @ brief If the training table is a valid encoded table, then we use it directly.
-#         If the training table is not encoded, then we invoke the encoding procedure
-#         to transform the training table.
-#         With the encoded table, we call the tree grow engine to generate the final tree.
-#
-# @param dt_algo_name                The name of the algorithom. Currently, it's
-#                                    'C4.5' or 'RF'
-# @param split_criterion             This parameter specifies which split criterion
-#                                    should be used for tree construction and
-#                                    pruning. The valid values are infogain,
-#                                    gainratio, and gini.
-# @param num_trees                   Total number of trees to be trained.
-# @param features_per_node           Total number of features used to compute split
-#                                    gain for each node.
-# @param training_table_name         The name of the table/view with the source data.
-# @param validation_table_name       The name of the validation table.
-# @param tree_table_name             The name of the table where the resulting
-#                                    DT/RF will be stored.
-# @param continuous_feature_names    A comma-separated list of the names of features whose values
-#                                    are continuous. The default is null, which means there are
-#                                    no continuous features in the training table.
-# @param feature_col_names           A comma-separated list of the names of table columns, each of
-#                                    which defines a feature. The default value is null, which means
-#                                    all the columns in the training table, except columns named
-#                                   ‘id’ and ‘class’, will be used as features.
-# @param id_col_name                 The name of the column containing id of each point.
-# @param class_col_name              The name of the column containing correct class
-#                                    of each point. 
-# @param confidence_level            A statistical confidence interval of the
-#                                    resubstitution error.
-# @param how2handle_missing_value    The way to handle missing value. The valid value
-#                                    is 'explicit' or 'ignore'.
-# @param max_tree_depth              Maximum decision tree depth.
-# @param sampling_percentage         The percentage of records sampled to train a tree.
-#                                    If it's NULL, 0.632 bootstrap will be used
-# @param sampling_needed             Whether enabling the sampling functionality.
-# @param node_prune_threshold        Specifies the minimum number of samples required
-#                                    in a child node. 
-# @param node_split_threshold        Specifies the minimum number of samples required
-#                                    in a node in order for a further split
-#                                    to be possible. 
-# @param error_msg                   The reported error message when the result table
-#                                    name is invalid.
-# @param verbosity                   > 0 means this function runs in verbose mode.
-#
-# @return An instance of __train_result.
-# -------------------------------------------
 def __encode_and_train(
-    madlib_schema               ,
-    dt_algo_name                ,
-    split_criterion             ,
-    num_trees                   ,
-    features_per_node           ,
-    training_table_name         ,
-    validation_table_name       ,
-    tree_table_name             ,
-    continuous_feature_names    ,
-    feature_col_names           ,
-    id_col_name                 ,
-    class_col_name              ,
-    confidence_level            ,   
-    how2handle_missing_value    ,
-    max_tree_depth              ,
-    sampling_percentage         ,
-    sampling_needed             ,
-    node_prune_threshold        ,
-    node_split_threshold        ,
-    error_msg                   ,
-    verbosity    
-):
+        madlib_schema,
+        dt_algo_name,
+        split_criterion,
+        num_trees,
+        features_per_node,
+        training_table_name,
+        validation_table_name,
+        tree_table_name,
+        continuous_feature_names,
+        feature_col_names,
+        id_col_name,
+        class_col_name,
+        confidence_level,
+        how2handle_missing_value,
+        max_tree_depth,
+        sampling_percentage,
+        sampling_needed,
+        node_prune_threshold,
+        node_split_threshold,
+        error_msg,
+        verbosity):
     """
-    @ brief If the training table is a valid encoded table, then we use it 
+    @brief If the training table is a valid encoded table, then we use it 
             directly.
             If the training table is not encoded, then we invoke the encoding
             procedure to transform the training table.
@@ -3567,25 +3314,24 @@ def __encode_and_train(
     enc_tree_name = ""
     cont_feature_col_names = []
     feature_name_array = []
-    class train_rs : pass #train result type
+    class train_rs:pass #train result type
 
     cont_feature_col_names = util.__str_to_array(continuous_feature_names, ',')
     feature_name_array = util.__str_to_array(feature_col_names, ',')
     
     # if the training table is an valid encoded table, then we retrieve
     # the relevant information from training_info table directly.
-    if __is_valid_enc_table(madlib_schema, training_table_name) :
+    if __is_valid_enc_table(madlib_schema, training_table_name):
         enc_tree_name = __get_tree_table_name(
-                            madlib_schema, 
-                            training_table_name
-                        )
+            madlib_schema, 
+            training_table_name)
         table_names[0] = training_table_name
         table_names[1] = __get_metatable_name(madlib_schema, enc_tree_name)
         h2hmv_routine_name = __get_routine_name(madlib_schema, enc_tree_name)
 
-        if h2hmv_routine_name == "ignore" :
+        if h2hmv_routine_name == "ignore":
             h2hmv_routine_id = 1
-        else :
+        else:
             h2hmv_routine_id = 2
        
         # validate the metatable
@@ -3595,13 +3341,12 @@ def __encode_and_train(
         util.__assert(
             features_per_node is None or n_fids >= features_per_node,
             "the value of features_per_node must be less than or equal to the " \
-            "total number of features of the training table"
-        )
+            "total number of features of the training table")
 
         # create tree table and auxiliary tables
         # so that we can get the schema name of the table
         __create_tree_tables(madlib_schema, tree_table_name)
-    else :
+    else:
         # the provided columns must be in the training table
         __check_training_table(
             madlib_schema,
@@ -3610,14 +3355,13 @@ def __encode_and_train(
             feature_name_array,
             id_col_name,
             class_col_name,
-            features_per_node
-        )
+            features_per_node)
 
         h2hmv_routine_name = how2handle_missing_value.strip()
 
-        if how2handle_missing_value == 'ignore' :
+        if how2handle_missing_value == 'ignore':
             h2hmv_routine_id = 1
-        else :
+        else:
             h2hmv_routine_id = 2
 
         # create tree table and auxiliary tables
@@ -3626,10 +3370,9 @@ def __encode_and_train(
 
         # encode the training table
         table_names = __gen_enc_meta_names(
-                          madlib_schema,
-                          tree_table_name,
-                          error_msg
-                      )
+            madlib_schema,
+            tree_table_name,
+            error_msg)
         
         preproc.__encode_table_training(
             madlib_schema,
@@ -3641,45 +3384,17 @@ def __encode_and_train(
             table_names[0],
             table_names[1], 
             h2hmv_routine_id, 
-            verbosity
-        )
+            verbosity)
         
-        curstmt = """
-                  SELECT {madlib_schema}.__encode_table
-                  (
-                      '{training_table_name}',
-                      '{id_col_name}',
-                      {feature_name_array},
-                      '{class_col_name}',
-                      {cont_feature_col_names},
-                      '{table_name_encode}',
-                      '{table_name_meta}',
-                      {h2hmv_routine_id},
-                      {verbosity}
-                  )
-                  """.format(
-                      madlib_schema = madlib_schema, 
-                      training_table_name = training_table_name,
-                      id_col_name = id_col_name,
-                      feature_name_array = 
-                          util.__list_to_sql(feature_name_array),
-                      class_col_name = class_col_name,
-                      cont_feature_col_names = 
-                          util.__list_to_sql(cont_feature_col_names),
-                      table_name_encode = table_names[0],
-                      table_name_meta = table_names[1],
-                      h2hmv_routine_id = h2hmv_routine_id,
-                      verbosity = verbosity
-                  )
         n_fids = preproc.__num_of_feature(madlib_schema, table_names[1])
         
-    if sampling_needed :
-        if features_per_node is None :
+    if sampling_needed:
+        if features_per_node is None:
             n_fids = round(math.sqrt(n_fids) - 0.5) + 1
-        else :
+        else:
             n_fids = features_per_node
 
-    if verbosity > 0 :
+    if verbosity > 0:
         plpy.info("features_per_node: " + str(n_fids))
     
     # insert data to the training_info table    
@@ -3695,29 +3410,27 @@ def __encode_and_train(
         split_criterion,
         sampling_percentage,
         n_fids,
-        num_trees
-    )
+        num_trees)
     
     # call the tree grow engine
     train_rs = __train_tree(
-                   madlib_schema,
-                   split_criterion,
-                   num_trees,
-                   n_fids ,
-                   table_names[0],
-                   table_names[1],
-                   tree_table_name,
-                   validation_table_name,
-                   'id',
-                   'class',
-                   confidence_level, 
-                   max_tree_depth,
-                   sampling_percentage,
-                   node_prune_threshold,
-                   node_split_threshold,
-                   sampling_needed,
-                   h2hmv_routine_id,
-                   verbosity
-               )   
+        madlib_schema,
+        split_criterion,
+        num_trees,
+        n_fids,
+        table_names[0],
+        table_names[1],
+        tree_table_name,
+        validation_table_name,
+        'id',
+        'class',
+        confidence_level, 
+        max_tree_depth,
+        sampling_percentage,
+        node_prune_threshold,
+        node_split_threshold,
+        sampling_needed,
+        h2hmv_routine_id,
+        verbosity)   
     
     return train_rs

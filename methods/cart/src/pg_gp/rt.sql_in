@@ -53,25 +53,13 @@ CREATE TYPE MADLIB_SCHEMA.rt_train_result AS
         tree_depth          INT,
         training_time       INTERVAL
     );
+
 /*
  * @brief Remove the trained tree from training info table.
  *
  * @param tree_table    The full name of the tree table.
  *
  */
-
-CREATE OR REPLACE FUNCTION MADLIB_SCHEMA.rt_train
-    (
-    )
-RETURNS MADLIB_SCHEMA.rt_train_result AS $$
-    PythonFunctionBodyOnly(`cart', `rt')
-      
-    return rt.__rt_train(MADlibSchema, 'const_value', 'golf_rt_test', 'trained_tree_rt',
-        None, 'temperature,humidity', 'outlook,temperature,humidity,windy', 'id',
-        'predict_val', 0.01, 'explicit', 10, 0.001, 0.01, 0)
-$$ LANGUAGE PLPYTHONU;
-
- 
 CREATE OR REPLACE FUNCTION MADLIB_SCHEMA.rt_train
     (
     rt_type                     TEXT,
@@ -90,24 +78,12 @@ CREATE OR REPLACE FUNCTION MADLIB_SCHEMA.rt_train
     verbosity                   INT
     )   
 RETURNS MADLIB_SCHEMA.rt_train_result AS $$
-    PythonFunctionBodyOnly(`cart', `rt')
-                
-    return rt.__rt_train(MADlibSchema, 'const_value', 'golf_rt_test', 'trained_tree_rt', 
-        None, 'temperature,humidity', 'outlook,temperature,humidity,windy', 'id',
-        'predict_val', 0.01, 'explicit', 10, 0.001, 0.01, 0)
+    PythonFunctionBodyOnly(`cart', `rt')             
+    return rt.__rt_train(MADlibSchema, rt_type, training_table_name, result_tree_table_name, 
+        validation_table_name, continuous_feature_names, feature_col_names, id_col_name,
+        val_col_name, min_variance_gain, how2handle_missing_value, max_tree_depth, min_percent_node, 
+        min_percent_split, verbosity)
 $$ LANGUAGE PLPYTHONU;
-
-
-CREATE OR REPLACE FUNCTION MADLIB_SCHEMA.__display_node_sfunc_rt
-    (
-    )
-RETURNS TEXT AS $$
-    PythonFunctionBodyOnly(`cart', `rt')
-  
-    return rt.__display_node_sfunc(MADlibSchema, state, depth, is_cont,
-        feat_name, curr_val, split_value, predict_val, num_of_samples)
-$$ LANGUAGE PLPYTHONU;
-
 
 
 CREATE OR REPLACE FUNCTION MADLIB_SCHEMA.__display_node_sfunc_rt
@@ -123,10 +99,10 @@ CREATE OR REPLACE FUNCTION MADLIB_SCHEMA.__display_node_sfunc_rt
     )
 RETURNS TEXT AS $$
     PythonFunctionBodyOnly(`cart', `rt')
-
     return rt.__display_node_sfunc(MADlibSchema, state, depth, is_cont,
         feat_name, curr_val, split_value, predict_val, num_of_samples)
 $$ LANGUAGE PLPYTHONU;
+
 
 DROP AGGREGATE IF EXISTS MADLIB_SCHEMA.__display_tree_aggr_rt
     (
@@ -138,9 +114,6 @@ DROP AGGREGATE IF EXISTS MADLIB_SCHEMA.__display_tree_aggr_rt
     FLOAT8,     -- predict_val
     INT         -- num_of_samples
     ) CASCADE;
--- CREATE
--- m4_ifdef(`__GREENPLUM__', m4_ifdef(`__HAS_ORDERED_AGGREGATES__', `ORDERED'))
-
 CREATE ORDERED AGGREGATE MADLIB_SCHEMA.__display_tree_aggr_rt
     (
     INT,        -- depth
@@ -156,58 +129,15 @@ CREATE ORDERED AGGREGATE MADLIB_SCHEMA.__display_tree_aggr_rt
     STYPE = TEXT
 );
 
-CREATE OR REPLACE FUNCTION MADLIB_SCHEMA.rt_display
-    (
-    )
-RETURNS TEXT AS $$
-    PythonFunctionBodyOnly(`cart', `rt')
-
-    return rt.__rt_display(MADlibSchema, 'trained_tree_rt')
-$$ LANGUAGE PLPYTHONU;
-
 
 CREATE OR REPLACE FUNCTION MADLIB_SCHEMA.rt_display
     (
     rt_table_name           TEXT
     )
 RETURNS TEXT AS $$
-    PythonFunctionBodyOnly(`cart', `rt')
-    
-    return rt.__rt_display(MADlibSchema, 'trained_tree_rt')
+    PythonFunctionBodyOnly(`cart', `rt')   
+    return rt.__rt_display(MADlibSchema, rt_table_name)
 $$ LANGUAGE PLPYTHONU;
-
-
-/*
- * @brief Aggregation for calculating the variance gain.
- * @param
- */
-DROP AGGREGATE IF EXISTS MADLIB_SCHEMA.__calc_variance_gain
-    (
-    INT,        -- rt_code
-    FLOAT8,     -- fval
-    BOOLEAN,    -- is_cont
-    FLOAT8,     -- elem_count_le
-    FLOAT8,     -- elem_count_gt
-    FLOAT8,     -- sum_of_val_le
-    FLOAT8,     -- sum_of_val_gt
-    FLOAT8,     -- sum_of_val_square_le
-    FLOAT8      -- sum_of_val_square_gt
-    ) CASCADE;
-/*CREATE AGGREGATE MADLIB_SCEHMA.__calc_variance_gain
- *   (
- *   INT,        -- rt_code        
- *   FLOAT8,     -- fval
- *   BOOLEAN,    -- is_cont
- *   FLOAT8,     -- elem_count_le
- *   FLOAT8,     -- elem_count_gt
- *   FLOAT8,     -- sum_of_val_le
- *   FLOAT8,     -- sum_of_val_gt
- *   FLOAT8,     -- sum_of_val_square_le
- *   FLOAT8      -- sum_of_val_square_gt
- *   )
- *(
- *);
- */
 
 
 DROP TYPE IF EXISTS MADLIB_SCHEMA.rt_predict_result CASCADE;
@@ -217,23 +147,19 @@ CREATE TYPE MADLIB_SCHEMA.rt_predict_result AS
     prediction_time         INTERVAL
 );
 
-CREATE OR REPLACE FUNCTION MADLIB_SCHEMA.rt_test_golf
+
+CREATE OR REPLACE FUNCTION MADLIB_SCHEMA.rt_predict
     (
+    rt_table_name           TEXT,
+    prediction_table_name   TEXT,
+    result_table_name       TEXT,
+    verbosity               INT
     )
-RETURNS TEXT AS $$
+RETURNS MADLIB_SCHEMA.rt_predict_result AS $$
     PythonFunctionBodyOnly(`cart', `rt')
-
-    res_train = rt.__rt_train(MADlibSchema, 'const_value', 'golf_rt_test', 'trained_tree_rt',
-        None, 'temperature,humidity', 'outlook,temperature,humidity,windy', 'id',
-        'predict_val', 0.01, 'explicit', 10, 0.001, 0.01, 0)
-    plpy.info(str(res_train))
-
-    plpy.execute("DROP TABLE IF EXISTS result_predict_rt;")
-    res_predict = rt.__rt_predict(MADlibSchema, 'trained_tree_rt', 'golf_rt_test',
-        'result_predict_rt', 0)
-    plpy.info(str(res_predict))
-
-    return rt.__rt_display(MADlibSchema, 'trained_tree_rt');
+ 
+    return rt.__rt_predict(MADlibSchema, rt_table_name, prediction_table_name, 
+        result_table_name, verbosity)
 $$ LANGUAGE PLPYTHONU;
 
 
@@ -254,31 +180,24 @@ RETURNS TEXT AS $$
     return rt.__rt_display(MADlibSchema, 'trained_tree_rt_house')
 $$ LANGUAGE PLPYTHONU;
 
-CREATE OR REPLACE FUNCTION MADLIB_SCHEMA.rt_predict
+
+CREATE OR REPLACE FUNCTION MADLIB_SCHEMA.rt_test_golf
     (
     )
-RETURNS MADLIB_SCHEMA.rt_predict_result AS $$
+RETURNS TEXT AS $$
     PythonFunctionBodyOnly(`cart', `rt')
-    plpy.execute(
-        """
-        DROP TABLE IF EXISTS result_predict_rt;
-        """)
-    return rt.__rt_predict(MADlibSchema, 'trained_tree_rt', 'golf_rt_test',
+    res_train = rt.__rt_train(MADlibSchema, 'const_value', 'golf_rt_test', 'trained_tree_rt',
+        None, 'temperature,humidity', 'outlook,temperature,humidity,windy', 'id',
+        'predict_val', 0.01, 'explicit', 10, 0.001, 0.01, 0)
+    plpy.info(str(res_train))
+
+    plpy.execute("DROP TABLE IF EXISTS result_predict_rt;")
+    res_predict = rt.__rt_predict(MADlibSchema, 'trained_tree_rt', 'golf_rt_test',
         'result_predict_rt', 0)
+    plpy.info(str(res_predict))
+
+    return rt.__rt_display(MADlibSchema, 'trained_tree_rt');
 $$ LANGUAGE PLPYTHONU;
 
-CREATE OR REPLACE FUNCTION MADLIB_SCHEMA.rt_predict
-    (
-    rt_table_name           TEXT,
-    prediction_table_name   TEXT,
-    result_table_name       TEXT,
-    verbosity               INT
-    )
-RETURNS MADLIB_SCHEMA.rt_predict_result AS $$
-    PythonFunctionBodyOnly(`cart', `rt')
- 
-    return rt.__rt_predict(MADlibSchema, 'trained_tree_rt', 'golf_rt_test', 
-        'result_predict_rt', 0)
-$$ LANGUAGE PLPYTHONU;
 
 

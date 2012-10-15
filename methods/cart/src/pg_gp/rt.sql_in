@@ -71,7 +71,7 @@ CREATE OR REPLACE FUNCTION MADLIB_SCHEMA.rt_train
     id_col_name                 TEXT,
     val_col_name                TEXT,
     min_variance_gain           FLOAT,
-    how2handle_missing_value    FLOAT,
+    how2handle_missing_value    TEXT,
     max_tree_depth              INT,
     min_percent_node            FLOAT,
     min_percent_split           FLOAT,
@@ -171,11 +171,11 @@ RETURNS TEXT AS $$
     rt.__rt_train(MADlibSchema, 'const_value', 'house', 'trained_tree_rt_house',
         None, 'crim,zn,indus,chas,nox,rm,age,dis,rad,tax,ptratio,b,lstat', 
         'crim,zn,indus,chas,nox,rm,age,dis,rad,tax,ptratio,b,lstat', 'id',
-        'medv', 0.01, 'explicit', 10, 0.001, 0.01, 0)
+        'medv', 0.01, 'explicit', 10, 0.001, 0.01, 1)
 
     plpy.execute("DROP TABLE IF EXISTS result_predict_rt_house;")
     rt.__rt_predict(MADlibSchema, 'trained_tree_rt_house', 'house',
-        'result_predict_rt_house', 0)
+        'result_predict_rt_house', 1)
 
     return rt.__rt_display(MADlibSchema, 'trained_tree_rt_house')
 $$ LANGUAGE PLPYTHONU;
@@ -188,16 +188,61 @@ RETURNS TEXT AS $$
     PythonFunctionBodyOnly(`cart', `rt')
     res_train = rt.__rt_train(MADlibSchema, 'const_value', 'golf_rt_test', 'trained_tree_rt',
         None, 'temperature,humidity', 'outlook,temperature,humidity,windy', 'id',
-        'predict_val', 0.01, 'explicit', 10, 0.001, 0.01, 0)
+        'predict_val', 0.01, 'explicit', 10, 0.001, 0.01, 1)
     plpy.info(str(res_train))
 
     plpy.execute("DROP TABLE IF EXISTS result_predict_rt;")
     res_predict = rt.__rt_predict(MADlibSchema, 'trained_tree_rt', 'golf_rt_test',
-        'result_predict_rt', 0)
+        'result_predict_rt', 1)
     plpy.info(str(res_predict))
 
-    return rt.__rt_display(MADlibSchema, 'trained_tree_rt');
+    return rt.__rt_display(MADlibSchema, 'trained_tree_rt')
 $$ LANGUAGE PLPYTHONU;
 
 
+CREATE OR REPLACE FUNCTION MADLIB_SCHEMA.rt_test_r10
+    (
+    )
+RETURNS TEXT AS $$
+    PythonFunctionBodyOnly(`cart', `rt')
+    res_train = rt.__rt_train(MADlibSchema, 'const_value', 'rt_1000000_10', 'trained_tree_rt_r10',
+        None, 'c6,c7,c8,c9,c10', 'd1,d2,d3,d4,d5,c6,c7,c8,c9,c10', 'id',
+        'predict_val', 0.01, 'explicit', 10, 0.001, 0.01, 1)
+    plpy.info('training time:'+str(res_train.training_time))
+    plpy.execute("DROP TABLE IF EXISTS result_predict_rt_r10;")
+    res_predict = rt.__rt_predict(MADlibSchema, 'trained_tree_rt_r10', 'rt_1000000_10',
+        'result_predict_rt_r10', 1)
+    plpy.info('predicting time:'+str(res_predict.prediction_time))
+
+    return rt.__rt_display(MADlibSchema, 'trained_tree_rt_r10')
+$$ LANGUAGE PLPYTHONU;
+
+CREATE OR REPLACE FUNCTION MADLIB_SCHEMA.rt_test
+    (
+        training_name TEXT
+    )
+RETURNS TEXT AS $$
+    PythonFunctionBodyOnly(`cart', `rt')
+    res_train = rt.__rt_train(MADlibSchema, 'const_value', training_name, 'trained_tree_rt_kddcup',
+        None, 
+        'duration,src_bytes,dst_bytes,wrong_fragment,urgent,hot,num_failed_logins,num_compromised,'+\
+        'root_shell,su_attempted,num_root,num_file_creations,num_shells,num_access_files,num_outbound_cmds'+\
+        ',count,srv_count,serror_rate,srv_serror_rate,rerror_rate,srv_rerror_rate,same_srv_rate,'+\
+        'diff_srv_rate,srv_diff_host_rate,dst_host_count,dst_host_srv_count,dst_host_same_srv_rate,'+\
+        'dst_host_diff_srv_rate,dst_host_same_src_port_rate,dst_host_srv_diff_host_rate,'+\
+        'dst_host_serror_rate,dst_host_srv_serror_rate,dst_host_rerror_rate,dst_host_srv_rerror_rate', 
+        'duration,src_bytes,dst_bytes,wrong_fragment,urgent,hot,num_failed_logins,num_compromised,' + \
+        'root_shell,su_attempted,num_root,num_file_creations,num_shells,num_access_files,num_outbound_cmds,' + \
+        'count,srv_count,serror_rate,srv_serror_rate,rerror_rate,srv_rerror_rate,same_srv_rate,diff_srv_rate,' + \
+        'srv_diff_host_rate,dst_host_count,dst_host_srv_count,dst_host_same_srv_rate,dst_host_diff_srv_rate,' + \
+        'dst_host_same_src_port_rate,dst_host_srv_diff_host_rate,dst_host_serror_rate,dst_host_srv_serror_rate,' + \
+        'dst_host_rerror_rate,dst_host_srv_rerror_rate', 'id',
+        'predict_val', 0.01, 'explicit', 10, 0.001, 0.01, 1)
+    plpy.info('training time:'+str(res_train.training_time))
+    plpy.execute("DROP TABLE IF EXISTS result_predict_rt_kddcup;")
+    res_predict = rt.__rt_predict(MADlibSchema, 'trained_tree_rt_kddcup', training_name,
+        'result_predict_rt_kddcup', 1)
+    plpy.info('predicting time:'+str(res_predict.prediction_time))
+    return rt.__rt_display(MADlibSchema, 'trained_tree_rt_kddcup')
+$$ LANGUAGE PLPYTHONU;
 

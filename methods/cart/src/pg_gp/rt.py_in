@@ -144,6 +144,7 @@ def __rt_train(
         "The value of rt_type must be 'const_value' or 'model'")
 
     # The provided columns must be in the training table
+    begin_t = datetime.datetime.now()
     __validate_provided_columns(
         madlib_schema,
         training_tbl_name,
@@ -151,6 +152,9 @@ def __rt_train(
         all_feature_array,
         id_col_name,
         val_col_name)
+    plpy.info(
+        ('validate provided columns time:' + 
+         str(datetime.datetime.now() - begin_t)))
 
     if how2hmv == 'ignore':
         h2hmv_routine_id = 1
@@ -166,6 +170,7 @@ def __rt_train(
     enc_tbl_name = table_names[0]
     meta_tbl_name = table_names[1]
     
+    begin_t = datetime.datetime.now()
     preproc.__encode_table_training(
         madlib_schema,
         training_tbl_name,
@@ -178,6 +183,9 @@ def __rt_train(
         h2hmv_routine_id,
         verbosity,
         'regression')
+    plpy.info(
+        ('encode table time:' + 
+         str(datetime.datetime.now() - begin_t)))
 
     # get the num of training feature.
     num_fids = preproc.__num_of_feature(madlib_schema, meta_tbl_name)
@@ -321,7 +329,6 @@ def __train_tree(
         """.format(
             result_tree_tbl_name = result_tree_tbl_name))
     
-    location_size = 0
     max_nid = 1
     while True:
         num_live_nodes = __get_live_node_num(
@@ -339,6 +346,7 @@ def __train_tree(
         # split.
         avs_tbl_name = 'training_instance_rt'
         node_info_tbl_name = 'node_info_aux'
+        begin_t = datetime.datetime.now()
         __gen_avs(
             madlib_schema,
             enc_tbl_name,
@@ -349,9 +357,14 @@ def __train_tree(
             val_col_name,
             node_info_tbl_name,
             verbosity)
+        if verbosity > 0:
+            plpy.info(
+                ('generate avs time:' + 
+                 str(datetime.datetime.now() - begin_t)))
         
         curr_level = curr_level + 1
 
+        begin_t = datetime.datetime.now()
         split_tbl_name = 'best_split_table'
         __find_best_split(
             madlib_schema,
@@ -362,11 +375,17 @@ def __train_tree(
             meta_tbl_name,
             grow_tree,
             verbosity)
+        if verbosity > 0:
+            plpy.info(
+                ('find best split time:' + 
+                 str(datetime.datetime.now() - begin_t)))
+
 
         grow_tree = grow_tree - 1
 
         # We get the calculation result for current level.
-        # Update the nodes of preivous level firstly. 
+        # Update the nodes of preivous level firstly.
+        begin_t = datetime.datetime.now()
         plpy.execute(
             """
             UPDATE {result_tree_tbl_name} t
@@ -382,8 +401,13 @@ def __train_tree(
             """.format(
                 result_tree_tbl_name = result_tree_tbl_name,
                 split_tbl_name = split_tbl_name))
-        
+        if verbosity > 0:
+            plpy.info(
+                ('update nodes time:' + 
+                 str(datetime.datetime.now() - begin_t)))
+
         # Generate child Nodes.
+        begin_t = datetime.datetime.now()
         plpy.execute(
             """
             INSERT INTO {result_tree_tbl_name}
@@ -423,6 +447,10 @@ def __train_tree(
                 mode_threshold = int(min_percent_node * total_size),
                 split_threshold = int(min_percent_split * total_size),
                 min_variance_gain = min_variance_gain))
+        if verbosity > 0:
+            plpy.info(
+                ('generate child node time:' + 
+                 str(datetime.datetime.now() - begin_t)))
 
         t = plpy.execute(
             "SELECT MAX(id) AS max FROM {result_tree_tbl_name};".format(
@@ -499,13 +527,23 @@ def __train_tree(
         cur_tr_table = tr_tables[tr_tbl_index]
         plpy.execute("TRUNCATE assoc_aux;")
     
+    begin_t = datetime.datetime.now()
     __generate_final_tree(
         madlib_schema, 
         result_tree_tbl_name)
+    if verbosity > 0:
+        plpy.info(
+            ('generate final tree time:' +
+             str(datetime.datetime.now() - begin_t)))
+    begin_t = datetime.datetime.now()
     __prune_tree(
         madlib_schema,
         result_tree_tbl_name, 
         validation_tbl_name)
+    if verbosity > 0:
+        plpy.info(
+            ('prune tree time:' +
+             str(datetime.datetime.now() - begin_t)))
     
     train_result.tree_depth = curr_level
     train_result.training_time = datetime.datetime.now() - begin_train_time
@@ -1495,16 +1533,25 @@ def __validate_provided_columns(
             val_col_name.strip().lower()),
         ('the specified training table <' + training_tbl_name +
             '> does not have column ' + str(val_col_name)))
-    util.__assert(
-        util.__columns_in_table(
-            madlib_schema,
-            all_feature_array,
-            training_tbl_name),
-        ('each feature in feature names must be a ' +
-            'column of the training table'))
-    util.__assert(
-        set(cont_feature_array) <= set(all_feature_array),
-        ('each feature int continuous feature names must be in the ' +
-            'feature names'))
+    if all_feature_array is None:       
+        util.__assert(
+            util.__columns_in_table(
+                madlib_schema,
+                cont_feature_array,
+                training_tbl_name),
+            ('each feature in continuous features must b a ' +
+             'column of the training table'))
+    else:
+        util.__assert(
+            util.__columns_in_table(
+                madlib_schema,
+                all_feature_array,
+                training_tbl_name),
+            ('each feature in feature names must be a ' +
+                'column of the training table'))
+        util.__assert(
+            set(cont_feature_array) <= set(all_feature_array),
+            ('each feature int continuous feature names must be in the ' +
+             'feature names'))
 
     

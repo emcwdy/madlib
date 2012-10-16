@@ -1242,7 +1242,7 @@ m4_changequote(>>>`<<<, >>>'<<<)
             ", gen_kv_time:" + str(ret.gen_kv_time) + 
             ", breakup_tbl_time:" + str(ret.breakup_tbl_time) + 
             ", post_proc_time:" + str(ret.post_proc_time) +
-            ", gen_enc_time:" + str(ret.gen_enc_time)
+            ", gen_enc_time:" + str(ret.gen_enc_time) +
             ",total_time:" + str(datetime.datetime.now() - begin_t))
         plpy.info("time of encoding: " + encode_time) 
  

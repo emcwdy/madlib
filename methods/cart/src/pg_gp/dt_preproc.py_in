@@ -1027,7 +1027,8 @@ def __encode_table_training(
     class ret:pass
 
     exec_begin = datetime.datetime.now()
-    
+    begin_t = datetime.datetime.now()
+
     __validate_input_table(
         madlib_schema, 
         input_tbl_name, 
@@ -1240,7 +1241,8 @@ m4_changequote(>>>`<<<, >>>'<<<)
         encode_time = ("pre_proc_time:" + str(ret.pre_proc_time) + 
             ", gen_kv_time:" + str(ret.gen_kv_time) + 
             ", breakup_tbl_time:" + str(ret.breakup_tbl_time) + 
-            ", post_proc_time:" + str(ret.post_proc_time))
+            ", post_proc_time:" + str(ret.post_proc_time) +
+            ",total_time:" + str(datetime.datetime.now() - begin_t))
         plpy.info("time of encoding: " + encode_time) 
  
 

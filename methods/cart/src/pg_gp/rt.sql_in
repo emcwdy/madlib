@@ -219,7 +219,10 @@ $$ LANGUAGE PLPYTHONU;
 
 CREATE OR REPLACE FUNCTION MADLIB_SCHEMA.rt_test
     (
-        training_name TEXT
+        training_name TEXT,
+        min_variance_gain FLOAT8,
+        min_node_percent FLOAT8,
+        min_split_percent FLOAT8
     )
 RETURNS TEXT AS $$
     PythonFunctionBodyOnly(`cart', `rt')
@@ -237,7 +240,7 @@ RETURNS TEXT AS $$
         'srv_diff_host_rate,dst_host_count,dst_host_srv_count,dst_host_same_srv_rate,dst_host_diff_srv_rate,' + \
         'dst_host_same_src_port_rate,dst_host_srv_diff_host_rate,dst_host_serror_rate,dst_host_srv_serror_rate,' + \
         'dst_host_rerror_rate,dst_host_srv_rerror_rate', 'id',
-        'predict_val', 0.01, 'explicit', 10, 0.001, 0.01, 1)
+        'predict_val', min_variance_gain, 'explicit', 10, min_node_percent, min_split_percent, 1)
     plpy.info('training time:'+str(res_train.training_time))
     plpy.execute("DROP TABLE IF EXISTS result_predict_rt_kddcup;")
     res_predict = rt.__rt_predict(MADlibSchema, 'trained_tree_rt_kddcup', training_name,

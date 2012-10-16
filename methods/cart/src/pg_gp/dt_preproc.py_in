@@ -9,6 +9,33 @@
 @namespace dt_preproc
 """
 
+m4_include(`SQLCommon.m4')
+
+m4_ifelse(
+    m4_eval(
+        m4_ifdef(`__GREENPLUM__', 1, 0) &&
+        __DBMS_VERSION_MAJOR__ * 100 + __DBMS_VERSION_MINOR__ < 401
+    ), 1,
+    `m4_define(`__GREENPLUM_PRE_4_1__')'
+)
+m4_ifelse( 
+    m4_eval(
+        m4_ifdef(`__POSTGRESQL__', 1, 0) && 
+        __DBMS_VERSION_MAJOR__ < 9
+    ), 1, 
+    `m4_define(`__POSTGRESQL_PRE_9_0__')'
+)
+m4_ifelse( 
+    m4_eval(
+        m4_ifdef(`__GREENPLUM__', 1, 0) &&
+        __DBMS_VERSION_MAJOR__ * 10000 + 
+        __DBMS_VERSION_MINOR__ * 100 +
+        __DBMS_VERSION_PATCH__ >= 40201
+    ), 1, 
+    `m4_define(`__GREENPLUM_GE_4_2_1__')'
+)
+
+
 import plpy
 import dt_utility as util
 import datetime
@@ -551,7 +578,7 @@ def __breakup_table(
     """ 
     fval_txt = "fval"
     exec_begin = datetime.datetime.now()
-
+    
     plpy.execute(
         "DROP TABLE IF EXISTS {breakup_tbl_name}".format(
             breakup_tbl_name = breakup_tbl_name))
@@ -560,7 +587,7 @@ m4_changequote(`>>>', `<<<')
 m4_ifdef(>>>__GREENPLUM_GE_4_2_1__<<<, >>>
     # if the DB is GPDB and its version is greater than or equal
     # to 4.2, then we will use RLE compression for the encoded table.
-    if enc_category == 'classfication':
+    if enc_category == 'classification':
         class_clause = 'class   INT    ENCODING (compresstype=RLE_TYPE)'
     elif enc_category == 'regression': 
         class_clause = 'predict_val   FLOAT  ENCODING (compresstype=RLE_TYPE)'
@@ -598,15 +625,12 @@ m4_ifdef(>>>__GREENPLUM_GE_4_2_1__<<<, >>>
             class_clause = class_clause)
 <<<)
 m4_changequote(>>>`<<<, >>>'<<<)
-
     plpy.execute(curstmt)
     
-    """
-    the supported missing value representation (' ', '?' and NULL) will
-    be replace with NULL for easy processing later.
-    the function __to_char is needed because on some databases an explicit
-    cast to text is unavailable.
-    """
+    # the supported missing value representation (' ', '?' and NULL) will
+    # be replace with NULL for easy processing later.
+    # the function __to_char is needed because on some databases an explicit
+    # cast to text is unavailable.
     where_txt = ""
     if h2hmv_routine_id == 1:
         where_txt = """ 

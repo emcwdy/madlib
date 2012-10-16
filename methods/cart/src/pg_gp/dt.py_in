@@ -3216,7 +3216,7 @@ def __check_training_table(
             util.__columns_in_table(
                 madlib_schema,
                 feature_col_names,
-                training_table_names),
+                training_table_name),
             "each feature in feature_col_names must be a " + \
             "column of the training table")
 

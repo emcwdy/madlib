@@ -1169,6 +1169,7 @@ def __gen_avs(
     plpy.execute(
         "DROP TABLE IF EXISTS {node_info_tbl_name};".format(
             node_info_tbl_name = node_info_tbl_name))
+    begin_t = datetime.datetime.now()
     plpy.execute(
         """
         CREATE TABLE {node_info_tbl_name} AS
@@ -1185,18 +1186,22 @@ def __gen_avs(
                    nid
             FROM
             (
-                SELECT tt.{val_col_name} AS predict_val, tr.nid
-                FROM {training_tbl_name} tt, {cur_tr_table} tr
+                SELECT tt.predict_val, tr.nid
+                FROM {enc_tbl_name} tt, {cur_tr_table} tr
                 WHERE tt.id = tr.id
+                GROUP BY tt.id, tt.predict_val, tr.nid
             ) s
             GROUP BY nid
         ) t
         m4_ifdef(`__GREENPLUM__', `DISTRIBUTED BY (nid)');
         """.format(
             node_info_tbl_name = node_info_tbl_name,
-            training_tbl_name = training_tbl_name,
+            enc_tbl_name = enc_tbl_name,
             val_col_name = val_col_name, 
             cur_tr_table = cur_tr_table))
+    if verbosity > 0:
+        plpy.info(('create node info time:' + 
+            str(datetime.datetime.now() - begin_t)))
     # First, generate the avs for discrete column and the continuous column
     # need further precessing.
     select_stmt = """
@@ -1289,7 +1294,11 @@ def __gen_avs(
         """.format(
             select_stmt = select_stmt,
             avs_tbl_name = avs_tbl_name)
+    begin_t = datetime.datetime.now()
     plpy.execute(curstmt)
+    if verbosity > 0:
+        plpy.info(('create avs time:' +
+            str(datetime.datetime.now() - begin_t)))
 
 
 def __get_live_node_num(

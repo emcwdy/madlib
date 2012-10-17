@@ -1347,7 +1347,7 @@ m4_ifdef(`__HAS_ORDERED_AGGREGATES__', >>>
         SELECT ARRAY
         (
             SELECT column_name
-            FROM {meta_tbl_name} WHERE column_type='f'
+            FROM {meta_tbl_name} WHERE column_type = 'f'
             ORDER BY id
             LIMIT ALL
         ) AS attr_col_names
@@ -1360,7 +1360,7 @@ m4_ifdef(`__HAS_ORDERED_AGGREGATES__', >>>
         (
             SELECT is_cont
             FROM {meta_tbl_name}
-            WHERE column_type='f'
+            WHERE column_type = 'f'
             ORDER BY id
             LIMIT ALL
         ) AS array_is_cont

@@ -201,9 +201,10 @@ def __rt_train(
         h2hmv_routine_id,
         verbosity,
         'regression')
-    plpy.info(
-        ('encode table time:' + 
-         str(datetime.datetime.now() - begin_t)))
+    if verbosity > 0:
+        plpy.info(
+            ('encode table time:' + 
+            str(datetime.datetime.now() - begin_t)))
 
     # get the num of training feature.
     num_fids = preproc.__num_of_feature(madlib_schema, meta_tbl_name)
@@ -1312,11 +1313,7 @@ def __gen_avs(
         """.format(
             select_stmt = select_stmt,
             avs_tbl_name = avs_tbl_name)
-    begin_t = datetime.datetime.now()
     plpy.execute(curstmt)
-    if verbosity > 0:
-        plpy.info(('create avs time:' +
-            str(datetime.datetime.now() - begin_t)))
 
 
 def __get_live_node_num(

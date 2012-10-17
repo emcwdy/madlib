@@ -2257,7 +2257,7 @@ def __treemodel_get_vote_result(madlib_schema, src_table, dst_table):
         """
         CREATE TEMP TABLE {dst_table}
         (
-            id          INT,
+            id          BIGINT,
             class       INT,
             prob        FLOAT8
         )m4_ifdef(`__GREENPLUM__', `DISTRIBUTED BY (id)')
@@ -2280,7 +2280,6 @@ def __treemodel_get_vote_result(madlib_schema, src_table, dst_table):
         """.format(
             dst_table = dst_table,
             src_table = src_table)
-
     plpy.execute(curstmt)
 
 
@@ -2321,7 +2320,6 @@ def __treemodel_classify_internal(
         util.__table_exists(madlib_schema, classification_table_name),
         ("the specified classification table <" + 
         classification_table_name + "> does not exists"))
-
     util.__assert(
         tree_table_name is not None and 
         util.__table_exists(madlib_schema, tree_table_name),
@@ -2332,6 +2330,7 @@ def __treemodel_classify_internal(
         """
         DROP TABLE IF EXISTS  {encoded_table_name} CASCADE
         """.format(encoded_table_name = encoded_table_name))
+    
     metatable_name = __get_metatable_name(madlib_schema, tree_table_name)
     h2hmv_routine_id = __get_routine_id(madlib_schema, tree_table_name)
 
@@ -2346,15 +2345,14 @@ def __treemodel_classify_internal(
     if verbosity > 0:
         plpy.info("abular format. id_col_name: " + id_col_name)
 
-    """
-    The table of classified_instance_ping and classified_instance_pong are
-    auxiliary tables used during the classification process.
-    For each record, these tables tell us which node it belongs to. They also
-    hold the information of class and probability.
-    We use transfer data between these two tables rather than update a single
-    table during the classification process. We find the operation of update
-    is quite expensive.
-    """
+    
+    # The table of classified_instance_ping and classified_instance_pong are
+    # auxiliary tables used during the classification process.
+    # For each record, these tables tell us which node it belongs to. They also
+    # hold the information of class and probability.
+    # We use transfer data between these two tables rather than update a single
+    # table during the classification process. We find the operation of update
+    # is quite expensive.
     plpy.execute("DROP TABLE IF EXISTS classified_instance_ping")
     plpy.execute(
         """
@@ -2416,8 +2414,8 @@ def __treemodel_classify_internal(
     plpy.execute(stmt)
 
     t = plpy.execute(
-        "SELECT max(array_upper(tree_location,1)) AS max FROM " + \
-        tree_table_name)
+        ("SELECT max(array_upper(tree_location,1)) AS max FROM " + \
+        tree_table_name))
     max_level = util.__get_query_value(t, "max")
 
     if max_level is None:
@@ -2488,11 +2486,9 @@ def __treemodel_classify_internal(
                 curr_level = curr_level)
         plpy.execute(curstmt)
         
-        """
-        if the node (whose id is "jump") doesn't exist,
-        then insert them into result table
-        (be classified to max_class of its corrsponding node)
-        """
+        # if the node (whose id is "jump") doesn't exist,
+        # then insert them into result table
+        # (be classified to max_class of its corrsponding node)
         ts = plpy.execute("SELECT DISTINCT tid FROM " + tree_table_name)
         for ts_r in ts:
             tree_id = ts_r.get("tid")
@@ -2885,14 +2881,12 @@ def __treemodel_score(
         ("the specified tree table <" + 
         tree_table_name + 
         "> does not exist"))
-
     util.__assert(
         scoring_table_name is not None and
         util.__table_exists(madlib_schema, scoring_table_name),
         ("the specified scoring table <" + 
         str(scoring_table_name) + 
         "> does not exist"))
-
     util.__assert(
         util.__column_exists(
             madlib_schema, scoring_table_name, 
@@ -2917,8 +2911,7 @@ def __treemodel_score(
         result_table_name, 
         result_table_name_final)
 
-    curstmt = "SELECT count(id) AS count FROM " + result_table_name_final    
- 
+    curstmt = "SELECT count(id) AS count FROM " + result_table_name_final
     t = plpy.execute(curstmt)
     num_of_row = util.__get_query_value(t, "count")
 
@@ -2931,7 +2924,6 @@ def __treemodel_score(
             result_table_name_final = result_table_name_final, 
             id_col_name = id_col_name,
             class_col_name = class_col_name )
-
     t = plpy.execute(curstmt)
     mis_of_row = util.__get_query_value(t, "count")
 

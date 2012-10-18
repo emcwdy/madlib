@@ -1287,10 +1287,7 @@ def __gen_avs(
                t.elem_count,
                t.sum_of_val,
                t.sum_of_val_square,
-               t.is_cont,
-               n.total_elem_count,
-               n.total_sum,
-               n.total_square_sum
+               t.is_cont
         FROM
         (
             SELECT fid,
@@ -1307,36 +1304,30 @@ def __gen_avs(
                 WHERE ed.id = tr.id 
             ) s
             GROUP BY nid, fid, fval, is_cont
-        ) t,
-        {node_info_tbl_name} n
-        WHERE t.nid = n.nid
+        ) t
         """.format(
             enc_tbl_name = enc_tbl_name,
-            cur_tr_table = cur_tr_table,
-            node_info_tbl_name = node_info_tbl_name)
+            cur_tr_table = cur_tr_table)
     curstmt = """
         CREATE TABLE {avs_tbl_name} AS
-        SELECT nid, fid, fval, is_cont, 
+        SELECT q.nid, fid, fval, is_cont, 
                elem_count_le,
-               CASE WHEN(is_cont) THEN total_elem_count - elem_count_le
+               CASE WHEN(is_cont) THEN n.total_elem_count - elem_count_le
                     ELSE 0
                END AS elem_count_gt,
                sum_of_val_le,
-               CASE WHEN(is_cont) THEN total_sum - sum_of_val_le
+               CASE WHEN(is_cont) THEN n.total_sum - sum_of_val_le
                     ELSE 0
                END AS sum_of_val_gt,
                sum_of_val_square_le,
                CASE WHEN(is_cont) 
-                    THEN total_square_sum - sum_of_val_square_le
+                    THEN n.total_square_sum - sum_of_val_square_le
                     ELSE 0
                END AS sum_of_val_square_gt,
                split_value
         FROM
         (
-            SELECT nid, fid, fval, is_cont, 
-                   l.total_elem_count,
-                   l.total_sum,
-                   l.total_square_sum,
+            SELECT nid, fid, fval, is_cont,
             CASE WHEN(is_cont) THEN SUM(elem_count) OVER
                  (
                  PARTITION BY nid, fid ORDER BY fval
@@ -1365,9 +1356,12 @@ def __gen_avs(
             (
                 {select_stmt}
             ) l
-        ) q
+        ) q,
+        {node_info_tbl_name} n
+        WHERE q.nid = n.nid
         m4_ifdef(`__GREENPLUM__', `DISTRIBUTED BY (fid, fval)')
         """.format(
+            node_info_tbl_name = node_info_tbl_name,
             select_stmt = select_stmt,
             avs_tbl_name = avs_tbl_name)
     plpy.execute(curstmt)

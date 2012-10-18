@@ -1446,6 +1446,7 @@ m4_changequote(>>>`<<<, >>>'<<<)
         plpy.info(
             "Encoding time:" + str(datetime.datetime.now() - exec_begin))
 
+
 def __size_of_table(
         madlib_schema,
         full_tbl_name):

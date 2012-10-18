@@ -896,7 +896,6 @@ def __rep_prune_tree(
                 metatable_name))
     n_t = plpy.execute(curstmt)
     n = util.__get_query_value(n_t, "count")
-
     util.__assert(
         n == 0,
         'the value of class column in validation table must in training table')
@@ -1011,8 +1010,10 @@ m4_ifdef(`__GREENPLUM_PRE_4_1__', >>>
         classify_result = temp_text
 <<<, >>>
         curstmt = """
-            UPDATE {classify_result} m set class = t.max_class,
-                   parent_id = t.parent_id, leaf_id = t.id
+            UPDATE {classify_result} m 
+            SET class = t.max_class,
+                parent_id = t.parent_id, 
+                leaf_id = t.id
             FROM {tree_table_name} t
             WHERE t.id IN 
             (
@@ -2463,7 +2464,7 @@ def __treemodel_classify_internal(
                                        gt.lmc_nid + fvals[gt.feature] - 
                                        gt.lmc_fval
                         END
-                   END as newjump, 
+                   END AS newjump, 
                    gt.max_class, gt.probability, gt.parent_id, gt.id
             FROM
             (
@@ -2969,7 +2970,7 @@ def __treemodel_clean(
     table_exists = util.__get_query_value(t, "existence")
     
     if table_exists:
-        metatable_name = __get_metatable_name(madlib_schema, model_table_name)
+        metaable_name = __get_metatable_name(madlib_schema, model_table_name)
 
         if metatable_name is not None:
             t = plpy.execute(

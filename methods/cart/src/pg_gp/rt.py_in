@@ -152,6 +152,7 @@ def __rt_train(
                                         know the destination node for a 
                                         certain sample.
     """
+    begin_train = datetime.datetime.now()
     cont_feature_array = util.__str_to_array(cont_feature_names, ',')
     all_feature_array = util.__str_to_array(feature_col_names, ',')
     
@@ -225,7 +226,7 @@ def __rt_train(
         1)
 
     # train the tree with the info of encoding table.
-    return __train_tree(
+    result =  __train_tree(
         madlib_schema,
         rt_type,
         training_tbl_name,
@@ -241,6 +242,12 @@ def __rt_train(
         min_percent_node,
         min_percent_split,
         verbosity)
+
+    if verbosity > 0:
+        plpy.info(
+            'total training time(breakup, encode):' + \
+            str(datetime.datetime.now() - begin_train))
+    return result
 
 
 def __train_tree(
@@ -554,15 +561,19 @@ def __train_tree(
         plpy.info(
             ('generate final tree time:' +
              str(datetime.datetime.now() - begin_t)))
-    begin_t = datetime.datetime.now()
-    __prune_tree(
-        madlib_schema,
-        result_tree_tbl_name, 
-        validation_tbl_name)
-    if verbosity > 0:
-        plpy.info(
-            ('prune tree time:' +
-             str(datetime.datetime.now() - begin_t)))
+
+    if validation_tbl_name is not None:
+        begin_t = datetime.datetime.now()
+        __prune_tree(
+            madlib_schema,
+            result_tree_tbl_name, 
+            validation_tbl_name,
+            enc_tbl_name,
+            verbosity)
+        if verbosity > 0:
+            plpy.info(
+                ('prune tree time:' +
+                str(datetime.datetime.now() - begin_t)))
     
     train_result.tree_depth = curr_level
     train_result.training_time = datetime.datetime.now() - begin_train_time
@@ -891,7 +902,9 @@ def __rt_predict(
         CREATE TABLE {result_tbl_name}
         (
             id              BIGINT,
-            predict_val     FLOAT8
+            predict_val     FLOAT8,
+            parent_id       INT,
+            leaf_id         INT
         )
         m4_ifdef(`__GREENPLUM__', `DISTRIBUTED BY (id)');
         """.format(
@@ -985,9 +998,9 @@ def __rt_predict(
             """
             INSERT INTO {result_tbl_name}
             (
-                id, predict_val
+                id, predict_val, parent_id, leaf_id
             )
-            SELECT id, predict_val
+            SELECT id, predict_val, parent_id, leaf_id
             FROM {table_name}
             WHERE jump NOT IN
             (
@@ -1038,10 +1051,54 @@ def __rt_predict(
 def __prune_tree(
         madlib_schema,
         result_tree_tbl_name,
-        validation_tbl_name):
+        validation_tbl_name,
+        enc_tbl_name,
+        verbosity):
     """
+    @brief  This function prunes the trained regression tree, and reduce the 
+            size of a regression tree and increase or maintain the predictive 
+            accuracy.
+
+    @param  madlib_schema           The name of the madlib schema.
+    @param  result_tree_tbl_name    The name of the trained regression tree.
+    @param  validation_tbl_name     Specify the table which is used to prune
+                                    the trained regression tree.
     """
-    undo = True
+    # may need check the validation table.
+
+    # predicting the value for pruning.
+    predict_result = 'result_predict_rt_prune'
+    plpy.execute(
+        "DROP TABLE IF EXISTS " + predict_result)
+    __rt_predict(
+        madlib_schema,
+        result_tree_tbl_name,
+        validation_tbl_name,
+        predict_result,
+        verbosity)
+    val_col_name = 'predict_val'
+    
+    assoc_prune = 'assoc_prune'
+    plpy.execute("DROP TABLE IF EXISTS " + assoc_prune)
+    plpy.execute(
+        """
+        CREATE TABLE {assoc_prune} AS
+        SELECT p.id, p.parent_id, p.leaf_id, e.predict_val AS real_val
+        FROM 
+        {predict_result} p,
+        (
+            SELECT id, predict_val
+            FROM {enc_tbl_name}
+            GROUP BY id, predict_val
+        ) e
+        WHERE p.id = e.id
+        """.format(
+            assoc_prune = assoc_prune,
+            predict_result = predict_result,
+            enc_tbl_name = enc_tbl_name))
+
+    
+
 
 
 def __find_best_split(
@@ -1578,4 +1635,54 @@ def __validate_provided_columns(
             ('each feature int continuous feature names must be in the ' +
              'feature names'))
 
-    
+
+def __rt_clean(madlib_schema, rt_tbl_name):
+    """
+    @brief  This function deletes those tables storing the regression tree,
+            related metadata and temporary tables.
+
+    @param  madlib_schema   The name of the madlib schema.
+    @param  rt_tbl_name     The name of the table that contains the
+                            information of trained RT tree. 
+    """
+
+    plpy.execute('SET client_min_messages = WARNING')
+    util.__assert(
+        rt_tbl_name is not None and
+        util.__table_exists(madlib_schema, rt_tbl_name),
+        'the specified tree table <' + rt_tbl_name + '> does not exists')
+    t = util.__table_exists(
+        madlib_schema,
+        '{madlib_schema}.training_info'.format(
+            madlib_schema = madlib_schema))
+    table_exists = util.__get_query_value(t, 'existence')
+
+    if table_exists:
+        metatable_name = dt.__get_metatable_name(madlib_schema, rt_tbl_name)
+        if metatable_name is not None:
+            t = plpy.execute(
+                """
+                SELECT count(*) AS count
+                FROM {madlib_schema}.training_info
+                WHERE training_metatable_oid = '{metatable_name}'::regclass
+                """.format(
+                    madlib_schema = madlib_schema,
+                    metatabl_name = metatable_name))
+            ref_count = util.__get_query_value(t, 'count')
+
+            # if the metatable is not referenced by other training procedure.
+            if ref_count == 1:
+                preproc.__drop_metatable(madlib_schema, metatable_name)
+                table_names = __gen_enc_meta_names(madlib_schema, rt_tbl_name)
+                plpy.execute(
+                    ("DROP TABLE IF EXISTS " +
+                    table_names[0]))
+
+        # remove the record first, and then drop the table
+        dt.__delete_traininginfo(madlib_schema, rt_tbl_name)
+
+    plpy.execute("DROP TABLE IF EXISTS " + rt_tbl_na,e)
+    return True
+
+
+

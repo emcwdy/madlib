@@ -382,6 +382,7 @@ def __train_tree(
             training_tbl_name,
             val_col_name,
             node_info_tbl_name,
+            tmp_hori_tbl_name,
             verbosity)
         if verbosity > 0:
             plpy.info(
@@ -405,7 +406,6 @@ def __train_tree(
             plpy.info(
                 ('find best split time:' + 
                  str(datetime.datetime.now() - begin_t)))
-
 
         grow_tree = grow_tree - 1
 
@@ -1217,6 +1217,7 @@ def __gen_avs(
         training_tbl_name,
         val_col_name,
         node_info_tbl_name,
+        tmp_hori_tbl_name,
         verbosity):
     """
     @brief  Generate the AVS(Attribute-Value Statistics) for leaf nodes of the
@@ -1263,17 +1264,17 @@ def __gen_avs(
             FROM
             (
                 SELECT tt.predict_val, tr.nid
-                FROM {enc_tbl_name} tt, {cur_tr_table} tr
+                FROM 
+                {tmp_hori_tbl_name} tt,
+                {cur_tr_table} tr
                 WHERE tt.id = tr.id
-                GROUP BY tt.id, tt.predict_val, tr.nid
             ) s
             GROUP BY nid
         ) t
         m4_ifdef(`__GREENPLUM__', `DISTRIBUTED BY (nid)');
         """.format(
             node_info_tbl_name = node_info_tbl_name,
-            enc_tbl_name = enc_tbl_name,
-            val_col_name = val_col_name, 
+            tmp_hori_tbl_name = tmp_hori_tbl_name,
             cur_tr_table = cur_tr_table))
     if verbosity > 0:
         plpy.info(('create node info time:' + 

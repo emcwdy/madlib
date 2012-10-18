@@ -2970,7 +2970,7 @@ def __treemodel_clean(
     table_exists = util.__get_query_value(t, "existence")
     
     if table_exists:
-        metaable_name = __get_metatable_name(madlib_schema, model_table_name)
+        metatable_name = __get_metatable_name(madlib_schema, model_table_name)
 
         if metatable_name is not None:
             t = plpy.execute(

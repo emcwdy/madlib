@@ -943,13 +943,13 @@ m4_changequote(>>>`<<<, >>>'<<<)
             FROM
             (
                 SELECT parent_id,
-                {madlib_schema}.__rep_aggr_class_count (
+                {madlib_schema}.__rep_aggr_class_count(
                     c.class,
                     s.{class_col_name},
                     {max_num_classes}
                 ) AS g
                 FROM {classify_result} c, {encoded_table_name} s
-                WHERE c.id=s.{id_col_name}
+                WHERE c.id = s.{id_col_name}
                 GROUP BY parent_id
             ) t
             WHERE t.g[2] >= 0 AND

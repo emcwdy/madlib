@@ -568,7 +568,7 @@ def __train_tree(
             madlib_schema,
             result_tree_tbl_name, 
             validation_tbl_name,
-            enc_tbl_name,
+            val_col_name,
             verbosity)
         if verbosity > 0:
             plpy.info(
@@ -843,6 +843,7 @@ def __rt_predict(
         """
         DROP TABLE IF EXISTS {enc_tbl_name} CASCADE;
         """.format(enc_tbl_name = enc_tbl_name))
+    
     metatable_name = dt.__get_metatable_name(madlib_schema, tree_tbl_name)
     h2hmv_routine_id = dt.__get_routine_id(madlib_schema, tree_tbl_name)
     ret.num_of_samples = preproc.__size_of_table(
@@ -1045,6 +1046,20 @@ def __rt_predict(
             table_name = table_names[(table_pick + 1) % 2]))
     ret.prediction_time = datetime.datetime.now() - begin_predict_time
 
+    t = plpy.execute(
+        """
+        SELECT 
+        (
+            SUM(pow((p.{val_col_name} - r.predict_val), 2))/COUNT(p.id)
+        )::FLOAT8 AS square_error_avg
+        FROM {prediction_tbl_name} p, {result_tbl_name} r
+        WHERE p.id = r.id
+        """.format(
+            val_col_name = val_col_name,
+            prediction_tbl_name = prediction_tbl_name,
+            result_tbl_name = result_tbl_name))
+    plpy.info("square_error_avg:" + str(util.__get_query_value(t, 'square_error_avg')))
+
     return ret
 
 
@@ -1052,7 +1067,7 @@ def __prune_tree(
         madlib_schema,
         result_tree_tbl_name,
         validation_tbl_name,
-        enc_tbl_name,
+        val_col_name,
         verbosity):
     """
     @brief  This function prunes the trained regression tree, and reduce the 
@@ -1076,29 +1091,126 @@ def __prune_tree(
         validation_tbl_name,
         predict_result,
         verbosity)
-    val_col_name = 'predict_val'
-    
-    assoc_prune = 'assoc_prune'
-    plpy.execute("DROP TABLE IF EXISTS " + assoc_prune)
+    t = plpy.execute(
+        """
+        SELECT
+        (
+            SUM(pow((p.{val_col_name} - r.predict_val), 2))/COUNT(p.id)
+        )::FLOAT8 AS square_error_avg
+        FROM {prediction_tbl_name} p, {result_tbl_name} r
+        WHERE p.id = r.id
+        """.format(
+            val_col_name = val_col_name,
+            prediction_tbl_name = validation_tbl_name,
+            result_tbl_name = predict_result))
+    plpy.info("square_error_avg:" + str(util.__get_query_value(t, 'square_error_avg')))
+
+    rt_prune_aux = 'rt_prune_aux'
+    plpy.execute("DROP TABLE IF EXISTS " + rt_prune_aux)
     plpy.execute(
         """
-        CREATE TABLE {assoc_prune} AS
-        SELECT p.id, p.parent_id, p.leaf_id, e.predict_val AS real_val
-        FROM 
-        {predict_result} p,
-        (
-            SELECT id, predict_val
-            FROM {enc_tbl_name}
-            GROUP BY id, predict_val
-        ) e
-        WHERE p.id = e.id
+        CREATE TABLE {rt_prune_aux} AS
+        SELECT p.id, p.leaf_id, p.parent_id, 
+               p.predict_val AS leaf_val,
+               t.{val_col_name} AS real_val
+        FROM {predict_result} p, {validation_tbl_name} t
+        WHERE p.id = t.id
         """.format(
-            assoc_prune = assoc_prune,
+            rt_prune_aux = rt_prune_aux,
             predict_result = predict_result,
-            enc_tbl_name = enc_tbl_name))
-
-    
-
+            val_col_name = val_col_name,
+            validation_tbl_name = validation_tbl_name))
+    rt_prune_select = 'rt_prune_select'
+    while True:
+        # get the nodes which are possible to be pruned
+        select_stmt = """    
+            SELECT a.*, r.predict_val AS parent_val
+            FROM {result_tree_tbl_name} r, {rt_prune_aux} a
+            WHERE r.id IN
+            (
+                SELECT parent_id
+                FROM {result_tree_tbl_name}
+                WHERE parent_id NOT IN
+                (
+                    SELECT parent_id
+                    FROM {result_tree_tbl_name}
+                    WHERE lmc_nid IS NOT NULL
+                ) AND id <> 1
+            ) AND r.id = a.parent_id
+            """.format(
+                result_tree_tbl_name = result_tree_tbl_name,
+                rt_prune_aux = rt_prune_aux)
+        
+        plpy.execute("DROP TABLE IF EXISTS " + rt_prune_select)
+        plpy.execute(
+            """
+            CREATE TABLE {rt_prune_select} AS
+            SELECT parent_id, 
+                   parent_sum,
+                   leaf_sum
+            FROM
+            (
+                SELECT parent_id,
+                       SUM(pow(parent_val - real_val, 2)) AS parent_sum,
+                       SUM(pow(leaf_val - real_val, 2)) AS leaf_sum
+                FROM ({select_stmt}) q
+                GROUP BY parent_id
+            ) t
+            WHERE parent_sum < leaf_sum
+            """.format(
+                select_stmt = select_stmt,
+                rt_prune_select = rt_prune_select))
+        
+        prune_size = preproc.__size_of_table(madlib_schema, rt_prune_select)
+        if verbosity > 0:
+            plpy.info("prune node size: " +str(prune_size))
+        if prune_size == 0:
+            break
+        
+        # update rt_prune_aux
+        plpy.execute(
+            """
+            UPDATE {rt_prune_aux} r
+            SET parent_id = t.parent_id,
+                leaf_id = t.id,
+                leaf_val = t.predict_val
+            FROM {result_tree_tbl_name} t
+            WHERE t.id IN
+            (
+                SELECT parent_id 
+                FROM {rt_prune_select}
+            ) AND t.id = r.parent_id
+            """.format(
+                rt_prune_aux = rt_prune_aux,
+                result_tree_tbl_name = result_tree_tbl_name,
+                rt_prune_select = rt_prune_select))
+        
+        # delete the pruned nodes
+        plpy.execute(
+            """
+            DELETE FROM {result_tree_tbl_name}
+            WHERE parent_id IN
+            (
+                SELECT parent_id from {rt_prune_select}
+            )
+            """.format(
+                result_tree_tbl_name = result_tree_tbl_name,
+                rt_prune_select = rt_prune_select))
+        
+        # update the trained tree, set lmc_nid, lmc_fval to null
+        plpy.execute(
+            """
+            UPDATE {result_tree_tbl_name} 
+            SET lmc_nid = NULL,
+                lmc_fval = NULL
+            WHERE id IN
+            (
+                SELECT parent_id 
+                FROM {rt_prune_select}
+            )
+            """.format(
+                result_tree_tbl_name = result_tree_tbl_name,
+                rt_prune_select = rt_prune_select))
 
 
 def __find_best_split(

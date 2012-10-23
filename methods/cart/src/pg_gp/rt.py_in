@@ -302,7 +302,7 @@ def __train_tree(
     """
     begin_train_time = datetime.datetime.now()
     class train_result:pass
-    grow_tree = max_tree_depth
+    grow_tree = max_tree_depth - 1
     num_feature = preproc.__num_of_feature(madlib_schema, meta_tbl_name)
     
     # generate the horizontal table for updating assigned node IDs.
@@ -1271,8 +1271,7 @@ def __find_best_split(
                 FROM
                 (
                     SELECT nid, fid, is_cont, split_value,
-                           CASE WHEN (is_cont)
-                                THEN SUM
+                           CASE WHEN (is_cont) THEN SUM
                                 (
                                     elem_count_le * sum_of_val_square_le -
                                     sum_of_val_le * sum_of_val_le +
@@ -1298,6 +1297,7 @@ def __find_best_split(
               m.min_item[2] = e.id
         m4_ifdef(`__GREENPLUM__', `DISTRIBUTED BY (nid)');
         """.format(
+            madlib_schema = madlib_schema,
             avs_tbl_name = avs_tbl_name,
             split_tbl_name = split_tbl_name,
             node_info_tbl_name = node_info_tbl_name,
@@ -1337,10 +1337,6 @@ def __gen_avs(
                                     information.
     """
     plpy.execute(
-        "DROP TABLE IF EXISTS {avs_tbl_name};".format(
-            avs_tbl_name = avs_tbl_name))
-
-    plpy.execute(
         "DROP TABLE IF EXISTS {node_info_tbl_name};".format(
             node_info_tbl_name = node_info_tbl_name))
     begin_t = datetime.datetime.now()
@@ -1379,33 +1375,27 @@ def __gen_avs(
     # First, generate the avs for discrete column and the continuous column
     # need further precessing.
     select_stmt = """
-        SELECT t.fid,
-               t.nid,
-               t.fval,
-               t.elem_count,
-               t.sum_of_val,
-               t.sum_of_val_square,
-               t.is_cont
+        SELECT fid,
+               fval,
+               COUNT(*) AS elem_count,
+               SUM(predict_val) AS sum_of_val,
+               SUM(predict_val * predict_val) AS sum_of_val_square,
+               is_cont,
+               nid
         FROM
         (
-            SELECT fid,
-                   fval,
-                   COUNT(*) AS elem_count,
-                   SUM(predict_val) AS sum_of_val,
-                   SUM(predict_val * predict_val) AS sum_of_val_square,
-                   is_cont,
-                   nid
-            FROM
-            (
-                SELECT ed.*, nid
-                FROM {enc_tbl_name} ed, {cur_tr_table} tr
-                WHERE ed.id = tr.id 
-            ) s
-            GROUP BY nid, fid, fval, is_cont
-        ) t
+            SELECT ed.*, nid
+            FROM {enc_tbl_name} ed, {cur_tr_table} tr
+            WHERE ed.id = tr.id 
+        ) s
+        GROUP BY nid, fid, fval, is_cont
         """.format(
             enc_tbl_name = enc_tbl_name,
             cur_tr_table = cur_tr_table)
+    
+    plpy.execute(
+        "DROP TABLE IF EXISTS {avs_tbl_name};".format(
+            avs_tbl_name = avs_tbl_name))
     curstmt = """
         CREATE TABLE {avs_tbl_name} AS
         SELECT q.nid, fid, fval, is_cont, 

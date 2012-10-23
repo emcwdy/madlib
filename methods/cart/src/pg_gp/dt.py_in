@@ -1394,7 +1394,7 @@ def __train_tree(
     temp_location = []
     sc_code = 1
     curstmt = ""
-    grow_tree = max_tree_depth
+    grow_tree = max_tree_depth - 1
     class ret : pass               # __train_result
     curr_level = 1
     class instance_time : pass     # __gen_acc_time
@@ -1516,8 +1516,8 @@ def __train_tree(
             FROM {result_tree_table_name}
             WHERE live > 0 AND array_upper(tree_location,1) = {curr_level}
             """.format(
-                    result_tree_table_name = result_tree_table_name, 
-                    curr_level = curr_level))
+                result_tree_table_name = result_tree_table_name, 
+                curr_level = curr_level))
         num_live_nodes = util.__get_query_value(t, "count")
         if num_live_nodes < 1:
             if verbosity > 0:

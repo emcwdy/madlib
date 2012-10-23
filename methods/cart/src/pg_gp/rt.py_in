@@ -1045,21 +1045,6 @@ def __rt_predict(
             result_tbl_name = result_tbl_name,
             table_name = table_names[(table_pick + 1) % 2]))
     ret.prediction_time = datetime.datetime.now() - begin_predict_time
-
-    t = plpy.execute(
-        """
-        SELECT 
-        (
-            SUM(pow((p.{val_col_name} - r.predict_val), 2))/COUNT(p.id)
-        )::FLOAT8 AS square_error_avg
-        FROM {prediction_tbl_name} p, {result_tbl_name} r
-        WHERE p.id = r.id
-        """.format(
-            val_col_name = val_col_name,
-            prediction_tbl_name = prediction_tbl_name,
-            result_tbl_name = result_tbl_name))
-    plpy.info("square_error_avg:" + str(util.__get_query_value(t, 'square_error_avg')))
-
     return ret
 
 

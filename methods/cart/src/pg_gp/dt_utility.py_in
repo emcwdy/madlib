@@ -93,10 +93,10 @@ def __str_to_array(text, delimiter):
     @param delimiter   The symbol that separates the text.    
     """
     if text is None or text == "":
-        return None
+        return []
     array = str(text).lower().strip().split(delimiter)
     if len(array) == 0:
-        return None
+        return []
     
     return [item.strip() for item in array]
         

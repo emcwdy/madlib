@@ -1107,10 +1107,14 @@ m4_changequote(>>>`<<<, >>>'<<<)
 
     # an array contains if a feature is continuous or not
     # the subscript is corresponding to the feature's ID
-    for name in attr_col_names:
-        if name in cont_attr_names:
-            is_conts.append(True)
-        else:
+    if cont_attr_names is not None:
+        for name in attr_col_names:
+            if name in cont_attr_names:
+                is_conts.append(True)
+            else:
+                is_conts.append(False)
+    else:
+        for name in attr_col_names:
             is_conts.append(False)
         
     ret.pre_proc_time = datetime.datetime.now() - exec_begin

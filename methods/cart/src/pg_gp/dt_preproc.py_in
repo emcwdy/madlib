@@ -97,7 +97,7 @@ def __validate_input_table(
               )
         """.format(full_table_name = full_table_name)
     # index = 1
-    if feature_columns is not None:
+    if feature_columns is not None and len(feature_columns) > 0:
         # If user do not specify feature columns, we use all those columns.
         # Otherwise, we just need to check those specified columns.
         all_columns = ",".join(

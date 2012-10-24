@@ -75,7 +75,7 @@ def __list_to_sql(list):
     
     @param list    The list.
     """
-    if list is None:
+    if list is None or len(list) == 0:
         return "null"
     else:
         list_str = ",".join(

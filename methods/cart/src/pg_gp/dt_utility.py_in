@@ -79,7 +79,7 @@ def __list_to_sql(list):
         return "null"
     else:
         list_str = ",".join(
-            "'" + __coalesce(column, "null") + "'"
+            "'" + __coalesce(str(column), "null") + "'"
             for column in list)
         list_str = "ARRAY[" + list_str + "]"
         return list_str

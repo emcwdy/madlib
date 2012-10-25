@@ -3327,7 +3327,6 @@ def __encode_and_train(
 
     if verbosity > 0:
         plpy.info("features_per_node: " + str(n_fids))
-    
     # insert data to the training_info table    
     __insert_into_traininginfo(
         madlib_schema,

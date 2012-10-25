@@ -900,7 +900,6 @@ def __encode_columns(
     # function. Therefore, don't drop this table in this
     # function.
     plpy.execute("DROP TABLE IF EXISTS tmp_dist_table")
-
     curstmt = """
         CREATE TEMP TABLE tmp_dist_table AS
         SELECT fid, fval, is_cont
@@ -1104,7 +1103,6 @@ m4_ifdef(`__HAS_ORDERED_AGGREGATES__', >>>
 m4_changequote(>>>`<<<, >>>'<<<) 
     else:
         attr_col_names = sorted(feature_names)
-
     # an array contains if a feature is continuous or not
     # the subscript is corresponding to the feature's ID
     if cont_attr_names is not None:
@@ -1195,8 +1193,9 @@ m4_changequote(>>>`<<<, >>>'<<<)
     # put the features' meta information to the metatable
     curstmt = """
         INSERT INTO {meta_tbl_name}
-        SELECT fid as id, ({attr_col_names})[fid] as column_name,
-               'f' as column_type,
+        SELECT fid AS id, 
+               ({attr_col_names})[fid] AS column_name,
+               'f' AS column_type,
                is_cont,
                '{kv_attr_name}'::regclass::OID,
                count(fid) as num_dist_value
@@ -1208,6 +1207,35 @@ m4_changequote(>>>`<<<, >>>'<<<)
             kv_attr_name = kv_attr_name,
             tmp_dist_table = "tmp_dist_table")
     plpy.execute(curstmt)
+
+    # when all value of a column are null, and the h2hmv_routine_id is 
+    # 1(ignore), the column would not be added to the meta table, so we only 
+    # add these columns manually.
+    if h2hmv_routine_id == 1:
+        plpy.execute(
+            """
+            INSERT INTO {meta_tbl_name}
+            SELECT g.fid AS id,
+                   ({attr_col_names})[g.fid] AS column_name,
+                   'f' AS column_type,
+                   (({is_conts})[g.fid])::BOOL,
+                   '{kv_attr_name}'::regclass::OID,
+                   1 as num_dist_value
+            FROM
+            ( 
+                SELECT generate_series(1, {num_fid}) as fid
+            ) g
+            WHERE g.fid NOT IN
+            (
+                SELECT id FROM {meta_tbl_name}
+            ) 
+            """.format(
+                num_fid = len(is_conts),
+                attr_col_names = util.__list_to_sql(attr_col_names),
+                is_conts = ('ARRAY[' + '::BOOL,'.join(
+                    str(is_cont) for is_cont in is_conts) + ']'),
+                kv_attr_name = kv_attr_name,
+                meta_tbl_name = meta_tbl_name))
 
     # no need this table
     plpy.execute("DROP TABLE IF EXISTS tmp_dist_table")

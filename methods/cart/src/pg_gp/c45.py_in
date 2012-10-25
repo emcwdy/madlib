@@ -122,9 +122,10 @@ def c45_train(
         # get rid of the messages whose severity level is lower than 'WARNING'
         plpy.execute("SET client_min_messages = WARNING")
     util.__assert(
-        confidence_level is not None and 
-        confidence_level >= 0.001 and 
-        confidence_level <= 100,
+        (confidence_level is None) or
+        (confidence_level is not None and 
+         confidence_level >= 0.001 and 
+         confidence_level <= 100),
         "confidence level value must be in range from 0.001 to 100")
     util.__assert(
         validation_table_name is None or

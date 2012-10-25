@@ -978,7 +978,7 @@ def __gen_horizontal_encoded_table(
         class_type = 'FLOAT'
 
     curstmt = """
-        CREATE TABLE {hor_tbl_name}(id, fvals, {class_txt}) AS
+        CREATE TEMP TABLE {hor_tbl_name}(id, fvals, {class_txt}) AS
         SELECT
                id,
                {madlib_schema}.__array_indexed_agg(fval, {attr_count}, fid)

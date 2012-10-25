@@ -3130,13 +3130,14 @@ def __check_training_table(
                 training_table_name) - 2 >= features_per_node,
             "the value of features_per_node must be less than or " + \
             "equal to the total number of features of the training table")
-        util.__assert(
-            util.__columns_in_table(
-                madlib_schema,
-                continuous_feature_names,
-                training_table_name),
-            "each feature in continuous_feature_names must be a " + \
-            "column of the training table")
+        if continuous_feature_names is not None:
+            util.__assert(
+                util.__columns_in_table(
+                    madlib_schema,
+                    continuous_feature_names,
+                    training_table_name),
+                "each feature in continuous_feature_names must be a " + \
+                "column of the training table")
     else:
         util.__assert(
             features_per_node is None or 
@@ -3150,10 +3151,11 @@ def __check_training_table(
                 training_table_name),
             "each feature in feature_col_names must be a " + \
             "column of the training table")
-        util.__assert(
-            set(continuous_feature_names) <= set(feature_col_names),
-            "each feature in continuous_feature_names must be in the" + \
-            " feature_col_names")
+        if continuous_feature_names is not None:
+            util.__assert(
+                set(continuous_feature_names) <= set(feature_col_names),
+                "each feature in continuous_feature_names must be in the" + \
+                " feature_col_names")
 
 
 def __encode_and_train(

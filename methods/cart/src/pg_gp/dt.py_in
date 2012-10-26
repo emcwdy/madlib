@@ -1394,7 +1394,7 @@ def __train_tree(
     temp_location = []
     sc_code = 1
     curstmt = ""
-    grow_tree = max_tree_depth - 1
+    grow_tree = max_tree_depth
     class ret : pass               # __train_result
     curr_level = 1
     class instance_time : pass     # __gen_acc_time
@@ -2207,7 +2207,8 @@ def __treemodel_get_vote_result(madlib_schema, src_table, dst_table):
             id          BIGINT,
             class       INT,
             prob        FLOAT8
-        )m4_ifdef(`__GREENPLUM__', `DISTRIBUTED BY (id)')
+        )
+        m4_ifdef(`__GREENPLUM__', `DISTRIBUTED BY (id)')
         """.format(dst_table = dst_table))
   
     curstmt = """
@@ -2215,10 +2216,10 @@ def __treemodel_get_vote_result(madlib_schema, src_table, dst_table):
         SELECT id, max_array[3], max_array[2] 
         FROM
         (
-            SELECT id, max(array[count,prob,class]) AS max_array 
+            SELECT id, MAX(array[count,prob,class]) AS max_array 
             FROM
             (
-                SELECT id, class, COUNT(*) AS count, AVG(prob) as prob
+                SELECT id, class, COUNT(*) AS count, AVG(prob) AS prob
                 FROM {src_table}
                 GROUP BY id,class
             ) t1 
@@ -2807,14 +2808,14 @@ def __treemodel_score(
         tree_table_name is not None and 
         util.__table_exists(madlib_schema, tree_table_name),
         ("the specified tree table <" + 
-        tree_table_name + 
-        "> does not exist"))
+         tree_table_name + 
+         "> does not exist"))
     util.__assert(
         scoring_table_name is not None and
         util.__table_exists(madlib_schema, scoring_table_name),
         ("the specified scoring table <" + 
-        str(scoring_table_name) + 
-        "> does not exist"))
+         str(scoring_table_name) + 
+         "> does not exist"))
     util.__assert(
         util.__column_exists(
             madlib_schema, scoring_table_name, 
@@ -2858,7 +2859,11 @@ def __treemodel_score(
     plpy.execute("DROP TABLE IF EXISTS " + encoded_table_name)
     plpy.execute("DROP TABLE IF EXISTS " + result_table_name)
     plpy.execute("DROP TABLE IF EXISTS " + result_table_name_final)
-    return float(num_of_row - mis_of_row) / num_of_row
+    
+    if num_of_row == 0:
+        plpy.info('The num of the result table is 0.')
+        return 0
+    return float(num_of_row - mis_of_row) / float(num_of_row)
 
 
 def __treemodel_clean(
@@ -2912,8 +2917,8 @@ def __treemodel_clean(
             if ref_count == 1:
                 preproc.__drop_metatable(madlib_schema, metatable_name)
                 plpy.execute(
-                    "DROP TABLE IF EXISTS " + \
-                    __get_encode_table_name(madlib_schema, model_table_name))
+                    ("DROP TABLE IF EXISTS " + 
+                     __get_encode_table_name(madlib_schema, model_table_name)))
 
         # remove the record first, and then drop the table
         __delete_traininginfo(madlib_schema, model_table_name)

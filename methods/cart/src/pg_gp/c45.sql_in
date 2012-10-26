@@ -475,8 +475,7 @@ RETURNS MADLIB_SCHEMA.c45_train_result AS $$
     PythonFunctionBodyOnly(`cart', `c45')
 
     return c45.c45_train(MADlibSchema, split_criterion, training_table_name, result_tree_table_name,
-               null, null, null, 'id', 'class', 25, 'explicit', 10, 0.001, 0.01, 0
-    )
+        null, null, null, 'id', 'class', 25, 'explicit', 10, 0.001, 0.01, 0)
 $$ LANGUAGE PLPYTHONU;
 
 

@@ -1418,7 +1418,7 @@ m4_changequote(>>>`<<<, >>>'<<<)
         curstmt = """
             SELECT {madlib_schema}.__regclass_to_text(table_oid) AS table_name
             FROM {meta_tbl_name}
-            WHERE column_type='c' 
+            WHERE column_type = 'c' 
             LIMIT 1
             """.format(
                 meta_tbl_name = meta_tbl_name,

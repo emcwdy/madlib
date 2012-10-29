@@ -139,7 +139,7 @@ def __num_of_columns(madlib_schema, tbl_name):
         """
         SELECT count(attname)::INT AS count
         FROM pg_attribute
-        WHERE attrelid = {tbl_name}::regclass AND
+        WHERE attrelid = '{tbl_name}'::regclass AND
               attnum > 0 AND
               NOT attisdropped
         """.format(tbl_name = tbl_name))

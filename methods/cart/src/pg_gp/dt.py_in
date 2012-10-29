@@ -3122,7 +3122,7 @@ def __check_training_table(
         # 2 means the id and class column
         util.__assert(
             features_per_node is None or
-            preproc.__num_of_columns(
+            util.__num_of_columns(
                 madlib_schema, 
                 training_table_name) - 2 >= features_per_node,
             "the value of features_per_node must be less than or " + \

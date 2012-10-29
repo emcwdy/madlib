@@ -131,6 +131,21 @@ def __column_exists(madlib_schema, full_table_name, column_name):
     return False
 
 
+def __num_of_columns(madlib_schema, tbl_name):
+    """
+    @brief Get the num of columns of a table.
+    """
+    t = plpy.execute(
+        """
+        SELECT count(attname)::INT AS count
+        FROM pg_attribute
+        WHERE attrelid = {tbl_name}::regclass AND
+              attnum > 0 AND
+              NOT attisdropped
+        """.format(tbl_name = tbl_name))
+    return __get_query_value(t, 'count')
+
+
 def __table_exists(madlib_schema, validation_table_name):
     """
     @brief Assert whether a table exists.Invoke a udf which is 

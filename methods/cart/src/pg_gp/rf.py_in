@@ -180,7 +180,7 @@ def rf_train(
         node_prune_threshold,
         node_split_threshold,
         verbosity,
-       'random forest')
+        'random forest')
 
     train_rs = dt.__encode_and_train(
         madlib_schema,

@@ -155,12 +155,19 @@ def __rt_train(
     begin_train = datetime.datetime.now()
     cont_feature_array = util.__str_to_array(cont_feature_names, ',')
     all_feature_array = util.__str_to_array(feature_col_names, ',')
-    
-    # the rt_type must be one of the 'const_value' and 'model', and now 
-    # we only support 'const_value'
-    util.__assert(
-        rt_type == 'const_value' or rt_type == 'model',
-        "The value of rt_type must be 'const_value' or 'model'")
+ 
+    # Check the common params
+    __check_common_params(
+        madlib_schema,
+        rt_type, 
+        training_tbl_name,
+        result_tree_tbl_name,
+        validation_tbl_name,
+        min_variance_gain,
+        how2hmv,
+        min_percent_node,
+        min_percent_split,
+        verbosity)
 
     # The provided columns must be in the training table
     begin_t = datetime.datetime.now()
@@ -180,7 +187,8 @@ def __rt_train(
     else:
         h2hmv_routine_id = 2
     h2hmv_routine_name = how2hmv.strip()
-
+    
+    # create the result tree table and the aux tables
     __create_tree_table(madlib_schema, result_tree_tbl_name)
     __create_aux_tables(madlib_schema)
     
@@ -189,6 +197,7 @@ def __rt_train(
     enc_tbl_name = table_names[0]
     meta_tbl_name = table_names[1]
     
+    # encode the training table
     begin_t = datetime.datetime.now()
     preproc.__encode_table_training(
         madlib_schema,
@@ -242,12 +251,104 @@ def __rt_train(
         min_percent_node,
         min_percent_split,
         verbosity)
-
     if verbosity > 0:
         plpy.info(
-            'total training time(breakup, encode):' + \
-            str(datetime.datetime.now() - begin_train))
+            ('total training time(breakup, encode):' + 
+            str(datetime.datetime.now() - begin_train)))
+    
     return result
+
+
+def __check_common_params(
+        madlib_schema,
+        rt_type, 
+        training_tbl_name,
+        result_tree_tbl_name,
+        validation_tbl_name,
+        min_variance_gain,
+        how2hmv,
+        min_percent_node,
+        min_percent_split,
+        verbosity):
+    """
+    @brief  Check the common params in regression training.
+    
+    @param madlib_schema        The name of the madlib schema.
+    @param rt_type              Specify the type of regression tree, which
+                                include 'const_value' and 'model'.
+    @param training_tbl_name    The table contains the training data.
+    @param result_tree_tbl_name The table that stores the result regression 
+                                tree.
+    @param validation_tbl_name  The table that is used to prune the regression
+                                tree.
+    @param min_variance_gain    Specify the min variance gain. When the gain
+                                is less than this value, the tree grower stop
+                                growing the regression tree.
+    @param how2hmv              Specify how to handle the missing value, we
+                                support two option, including 'ignore' and 
+                                'explicit'.
+    @param min_percent_node     Specify the min percent data that one tree
+                                node should contain at least.
+    @param min_percent_split    Specify the min percent data that one tree
+                                need to split. 
+    @param verbosity            Specify whether the algorithm should run in
+                                verbose mode.
+    """
+    # the rt_type must be const_value or model, by now we only support
+    # const_value regression tree
+    util.__assert(
+        rt_type == 'const_value' or 
+        rt_type == 'model',
+        "The rt_type must be 'const_value' or 'model'.")
+    
+    # the training table must exists
+    util.__assert(
+        training_tbl_name is not None and
+        util.__table_exists(madlib_schema, training_tbl_name),
+        ("The training table name must be not NULL and the training table" +
+         " must exist"))
+    
+    # the result tree table must not exist
+    util.__assert(
+        result_tree_tbl_name is not None and
+        not uitl.__table_exists(madlib_schema,result_tree_tbl_name),
+        ("The result tree table name must be not NULL and the result table" +
+         " must not exist"))
+
+    # if the validation_tbl_name is not NULL, the validation table must exist
+    util.__assert(
+        validation_tbl_name is None or
+        (validation_tbl_name is not None and
+         util.__table_exists(madlib_schema, validation_tbl_name)),
+        ("If the param validation_tbl_name is not NULL, the validation " +
+         "table must exist"))
+    
+    # the how to handle missing value param must be 'ignore' or 'explicit'
+    util.__assert(
+        how2hmv is not None and
+        (how2hmv == 'ignore' or 
+         how2hmv == 'explicit'),
+        "The how to handle missing value param must be 'ignore' or 'explicit")
+
+    # check the scope of min_variance_gain, min_percent_split and
+    # min_percent_node
+    util.__assert(
+        min_variance_gain is not None and
+        min_variance_gain >= 0,
+        ("The min_variance_gain should not be NULL and greater than or " +
+         "aequal 0"))
+    util.__assert(
+        min_percent_split is not None and
+        min_percent_split <= 1.0 and
+        min_percent_split >= 0.0,
+        ("The min percent split value should not be NULL and the value " +
+         "must be greater than or equal 0.0 and less than or equal 1.0"))
+    util.__assert(
+        min_percent_node is not None and
+        min_percent_node <= 1.0 and
+        min_percent_node >= 0.0,
+        ("The min percent node value should not be NULL and the value must " +
+         "be greater than or equal 0.0 and less than or equal 1.0"))
 
 
 def __train_tree(
@@ -302,7 +403,7 @@ def __train_tree(
     """
     begin_train_time = datetime.datetime.now()
     class train_result:pass
-    grow_tree = max_tree_depth - 1
+    grow_tree = max_tree_depth
     num_feature = preproc.__num_of_feature(madlib_schema, meta_tbl_name)
     
     # generate the horizontal table for updating assigned node IDs.
@@ -336,7 +437,7 @@ def __train_tree(
     plpy.execute(
         """
         INSERT INTO {cur_tr_table}
-        SELECT id, 1 AS nid, 1 AS weight
+        SELECT id, 1 AS nid
         FROM {tmp_hori_tbl_name}
         """.format(
             cur_tr_table = cur_tr_table,
@@ -390,7 +491,6 @@ def __train_tree(
                  str(datetime.datetime.now() - begin_t)))
         
         curr_level = curr_level + 1
-
         begin_t = datetime.datetime.now()
         split_tbl_name = 'best_split_table'
         __find_best_split(
@@ -406,7 +506,6 @@ def __train_tree(
             plpy.info(
                 ('find best split time:' + 
                  str(datetime.datetime.now() - begin_t)))
-
         grow_tree = grow_tree - 1
 
         # We get the calculation result for current level.
@@ -526,7 +625,7 @@ def __train_tree(
         tr_tbl_index = (tr_tbl_index + 1) % 2
         plpy.execute(
             """
-            INSERT INTO {tr_table} (id, nid, weight)
+            INSERT INTO {tr_table} (id, nid)
             SELECT tr.id,
                    au.lmc_id - 1 +
                    CASE WHEN (au.is_cont) THEN
@@ -536,8 +635,7 @@ def __train_tree(
                         END
                    ELSE
                         vt.fvals[au.fid]::INT
-                   END AS nid,
-                   weight
+                   END AS nid
             FROM {cur_tr_table} tr, {tmp_hori_tbl_name} vt, assoc_aux au
             WHERE tr.nid = au.nid AND
                   vt.id = tr.id AND
@@ -622,8 +720,8 @@ def __rt_display(madlib_schema, rt_tbl_name):
     @brief Display the trees in the regression tree with human readable
            format.
 
-    @param madlib_schema        The name of the madlib schema.
-    @param result_tree_tbl_name The name of regression tree table.
+    @param madlib_schema    The name of the madlib schema.
+    @param rt_tbl_name      The name of regression tree table.
     """
     util.__assert(
         rt_tbl_name is not None and
@@ -654,6 +752,7 @@ def __rt_display(madlib_schema, rt_tbl_name):
         ) m4_ifdef(`__GREENPLUM__', `DISTRIBUTED BY (id)');
         """.format(
             aux_tree_display_table = aux_tree_display_table))
+    
     # We made a self join for the tree table. For each node, we get the
     # feature information at its parent node so as to display this node.
     plpy.execute(
@@ -1063,8 +1162,25 @@ def __prune_tree(
     @param  result_tree_tbl_name    The name of the trained regression tree.
     @param  validation_tbl_name     Specify the table which is used to prune
                                     the trained regression tree.
+    @param  val_col_name            The predict value column.
+    @param  verbosity               > 0 means that algorithm run in verbose
+                                    mode.
     """
-    # may need check the validation table.
+    # check the validation table.
+    util.__assert(
+        val_col_name is not None and
+        validation_tbl_name is not None and
+        util.__column_exists(
+            madlib_schema,
+            validation_tbl_name, 
+            val_col_name),
+        ("The val_col_name and validation_tbl_name should not be NULL and " +
+         "the predict value column should be in the table validation table"))
+    util.__assert(
+        result_tree_tbl_name is not None and
+        util.__table_exists(madlib_schema, result_tree_tbl_name),
+        ("The result tree table name should not be NULL and the table must " +
+         "exist"))
 
     # predicting the value for pruning.
     predict_result = 'result_predict_rt_prune'
@@ -1076,19 +1192,6 @@ def __prune_tree(
         validation_tbl_name,
         predict_result,
         verbosity)
-    t = plpy.execute(
-        """
-        SELECT
-        (
-            SUM(pow((p.{val_col_name} - r.predict_val), 2))/COUNT(p.id)
-        )::FLOAT8 AS square_error_avg
-        FROM {prediction_tbl_name} p, {result_tbl_name} r
-        WHERE p.id = r.id
-        """.format(
-            val_col_name = val_col_name,
-            prediction_tbl_name = validation_tbl_name,
-            result_tbl_name = predict_result))
-    plpy.info("square_error_avg:" + str(util.__get_query_value(t, 'square_error_avg')))
 
     rt_prune_aux = 'rt_prune_aux'
     plpy.execute("DROP TABLE IF EXISTS " + rt_prune_aux)
@@ -1212,13 +1315,17 @@ def __find_best_split(
            stores the split information in the table that specified by the
            parameter split_tbl_name.
 
-    @param madlib_schema    The name of the madlib schema.
-    @param avs_tbl_name     The name of the avs table.
-    @param split_tbl_name   Specify the table that stores the result of the
-                            best split.
-    @param rt_type          Specify the type of the regression tree, which
-                            contains 'const_value' and 'model'.
-    @param verbosity
+    @param madlib_schema        The name of the madlib schema.
+    @param avs_tbl_name         The name of the avs table.
+    @param split_tbl_name       Specify the table that stores the result of the
+                                best split.
+    @param rt_type              Specify the type of the regression tree, which
+                                contains 'const_value' and 'model'.
+    @param node_info_tbl_name   The table contains the info of the tree node.
+    @param meta_tbl_name        The name of the meta table.
+    @param continue_grow        Specify the tree whether should continue to
+                                grow.The value > 0 means could grow, or stop.
+    @param verbosity            > 0 means the algorithm run in verbose mode.
     """
     if rt_type == 'const_value':
         rt_code = 1
@@ -1335,6 +1442,9 @@ def __gen_avs(
                                     table.
     @param  node_info_tbl_name      The table including the statistics 
                                     information.
+    @param  tmp_hori_tbl_name       The table that contains the horizental
+                                    info of training data.
+    @param  verbosity               > 0 means algorithm run in a verbose mode.
     """
     plpy.execute(
         "DROP TABLE IF EXISTS {node_info_tbl_name};".format(
@@ -1538,8 +1648,7 @@ m4_ifdef(>>>__GREENPLUM_GE_4_2_1__<<<, >>>
         CREATE TABLE tr_assoc_ping
         (
             id      BIGINT  ENCODING (compresstype=RLE_TYPE),
-            nid     INT     ENCODING (compresstype=RLE_TYPE),
-            weight  INT     ENCODING (compresstype=RLE_TYPE)
+            nid     INT     ENCODING (compresstype=RLE_TYPE)
         )
         WITH(appendonly=true, orientation=column)
         DISTRIBUTED BY(id);
@@ -1549,8 +1658,7 @@ m4_ifdef(>>>__GREENPLUM_GE_4_2_1__<<<, >>>
         CREATE TABLE tr_assoc_pong
         (
             id      BIGINT  ENCODING (compresstype=RLE_TYPE),
-            nid     INT     ENCODING (compresstype=RLE_TYPE),
-            weight  INT     ENCODING (compresstype=RLE_TYPE)
+            nid     INT     ENCODING (compresstype=RLE_TYPE)
         )
         WITH(appendonly=true, orientation=column)
         DISTRIBUTED BY(id);
@@ -1561,8 +1669,7 @@ m4_ifdef(>>>__GREENPLUM_GE_4_2_1__<<<, >>>
         CREATE TABLE tr_assoc_ping
         (
             id      BIGINT,
-            nid     INT,
-            weight  INT
+            nid     INT
         )m4_ifdef(`__GREENPLUM__', `DISTRIBUTED BY (id)');
         """)
     plpy.execute(
@@ -1570,8 +1677,7 @@ m4_ifdef(>>>__GREENPLUM_GE_4_2_1__<<<, >>>
         CREATE TABLE tr_assoc_pong
         (
             id      BIGINT,
-            nid     INT,
-            weight  INT
+            nid     INT
         )m4_ifdef(`__GREENPLUM__', `DISTRIBUTED BY (id)');
         """)
 <<<)
@@ -1654,7 +1760,7 @@ def __create_tree_table(madlib_schema, result_tree_tbl_name):
             num_of_samples  INT,
             parent_id       INT,
             lmc_nid         INT,
-            lmc_fval         FLOAT8,
+            lmc_fval        FLOAT8,
             predict_val     FLOAT8
         ) m4_ifdef(`__GREENPLUM__', `DISTRIBUTED BY (id)');
         """.format(result_tree_tbl_name = result_tree_tbl_name))
@@ -1733,13 +1839,8 @@ def __rt_clean(madlib_schema, rt_tbl_name):
         rt_tbl_name is not None and
         util.__table_exists(madlib_schema, rt_tbl_name),
         'the specified tree table <' + rt_tbl_name + '> does not exists')
-    t = util.__table_exists(
-        madlib_schema,
-        '{madlib_schema}.training_info'.format(
-            madlib_schema = madlib_schema))
-    table_exists = util.__get_query_value(t, 'existence')
 
-    if table_exists:
+    if util.__table_exists(madlib_schema, madlib_schema + '.training_info'):
         metatable_name = dt.__get_metatable_name(madlib_schema, rt_tbl_name)
         if metatable_name is not None:
             t = plpy.execute(

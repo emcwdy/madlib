@@ -148,7 +148,6 @@ def __table_exists(madlib_schema, validation_table_name):
         """.format(
             madlib_schema = madlib_schema, 
             validation_table_name = validation_table_name))
-
     return __get_query_value(t, "existence")    
     
 

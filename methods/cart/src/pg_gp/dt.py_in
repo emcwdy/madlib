@@ -1132,7 +1132,10 @@ def __generate_final_tree(madlib_schema, result_tree_table_name):
     # meet this criterion.
     while True:
         plpy.execute("DROP TABLE IF EXISTS trim_tree_aux_table CASCADE") 
+        
         # Find nodes whose children should be removed.
+        # find the parent_id which is the parent id of leaf node that should
+        # be removed.
         curstmt = """
             CREATE TEMP TABLE trim_tree_aux_table AS
             SELECT parent_id
@@ -1557,9 +1560,9 @@ def __train_tree(
         calc_acc_time = calc_acc_time + instance_time.calc_acc_time
         calc_olap_time = (calc_olap_time + (datetime.datetime.now() - 
             begin_olap_acs))
+
         curr_level = curr_level + 1
         begin_find_best = datetime.datetime.now()
-
         __find_best_split( 
             madlib_schema,
             'training_instance',
@@ -1570,13 +1573,12 @@ def __train_tree(
             'find_best_answer_table',
             h2hmv_routine_id,
             num_classes)
-
         if verbosity > 0:
             plpy.info(
                 ("find best time at this level: " +
                 str(datetime.datetime.now() - begin_find_best)))
-
         grow_tree = grow_tree - 1
+
         scv_acs_time = scv_acs_time + \
             (datetime.datetime.now() - begin_find_best)
         begin_data_transfer = datetime.datetime.now()
@@ -1604,6 +1606,7 @@ def __train_tree(
             (datetime.datetime.now() - begin_update_best)
         begin_update_child = datetime.datetime.now()
 
+        # insert new tree node based on finding best result
         curstmt = """
             INSERT INTO {result_tree_table_name}
             (
@@ -1627,7 +1630,7 @@ def __train_tree(
                             CASE WHEN (is_cont) 
                                  THEN generate_series(1,2)
                                  ELSE generate_series(1, distinct_features)
-                              END AS fval
+                            END AS fval
                     FROM find_best_answer_table
                     WHERE live > 0 AND 
                           coalesce(feature, 0) <> 0 AND 
@@ -1635,7 +1638,7 @@ def __train_tree(
                           node_size >= {split_threshold}
                 ) l
             ) ans
-            WHERE tree.id=ans.node_id and tree.tid=ans.tid
+            WHERE tree.id = ans.node_id and tree.tid = ans.tid
             """.format(
                 result_tree_table_name = result_tree_table_name,
                 max_nid = max_nid,
@@ -2880,27 +2883,12 @@ def __treemodel_clean(
     # get rid of the messages whose severity level is lower than 'WARNING'
     plpy.execute("SET client_min_messages = WARNING")
 
-    t = plpy.execute(
-        """
-        SELECT {madlib_schema}.__table_exists('{model_table_name}') AS existence
-        """.format(
-            madlib_schema = madlib_schema,
-            model_table_name = model_table_name))
     util.__assert(
         model_table_name is not None and 
-        util.__get_query_value(t, "existence"),
+        util.__table_exists(madlib_schema, model_table_name),
         "the specified tree table <" + model_table_name + "> does not exists")   
-
-    t = plpy.execute(
-        """
-        SELECT {madlib_schema}.__table_exists
-        (
-            '{madlib_schema}.training_info'
-        ) AS existence
-        """.format(madlib_schema = madlib_schema))
-    table_exists = util.__get_query_value(t, "existence")
     
-    if table_exists:
+    if util.__table_exists(madlib_schema, madlib_schema + '.training_info'):
         metatable_name = __get_metatable_name(madlib_schema, model_table_name)
         if metatable_name is not None:
             t = plpy.execute(
@@ -3011,6 +2999,10 @@ def __check_dt_common_params(
         how2handle_missing_value == 'ignore' or 
         how2handle_missing_value == 'explicit',
         "how2handle_missing_value must be ignore or explicit!")
+    util.__assert(
+        max_tree_depth is not None and
+        max_tree_depth > 0,
+        "max_tree_depth value must be greater than 0")
     util.__assert(
         node_prune_threshold is not None and 
         node_prune_threshold >= 0.0 and 

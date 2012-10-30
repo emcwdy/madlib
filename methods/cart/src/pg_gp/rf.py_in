@@ -261,13 +261,13 @@ def rf_display(
     else:
         tids = tree_id
         t = plpy.execute("SELECT max(tid) AS max FROM " + rf_table_name)
-        max_id = util.__get_query_value(t, "max")
+        max_tid = util.__get_query_value(t, "max")
 
         for tid in tids:
             util.__assert(
                 tid is not None and tid > 0 and tid <= max_tid,
                 ("he ID of the tree in the array must be in range " + 
-                "[1,{max_id}]".format(max_id = max_id)))
+                "[1,{max_tid}]".format(max_tid = max_tid)))
 
 m4_changequote(`>>>', `<<<')
 m4_ifdef(>>>__HAS_ORDERED_AGGREGATES__<<<, >>>

@@ -2270,7 +2270,7 @@ def __treemodel_classify_internal(
         classification_table_name is not None and
         util.__table_exists(madlib_schema, classification_table_name),
         ("the specified classification table <" + 
-        classification_table_name + "> does not exists"))
+         classification_table_name + "> does not exists"))
     util.__assert(
         tree_table_name is not None and 
         util.__table_exists(madlib_schema, tree_table_name),

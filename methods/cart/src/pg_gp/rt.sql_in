@@ -300,6 +300,9 @@ RETURNS TEXT AS $$
         None,
         'id','class',0.01,'explicit',10,0,0,1)
     plpy.info(str(rt.__rt_display(MADlibSchema, 'trained_tree_rt_madelon')))
+    plpy.execute("drop table if exists rt_result_madelon")
+    rt.__rt_predict(MADlibSchema, 'trained_tree_rt_madelon','rt_madelon_test','rt_result_madelon',1)
+    plpy.info(str(rt.__caculate_error(MADlibSchema,'rt_result_madelon','rt_result_madelon','class')))
 
     plpy.execute("drop table if exists trained_tree_rt_madelon")
     rt.__rt_train(MADlibSchema, 'const_value','rt_madelon','trained_tree_rt_madelon',
@@ -308,4 +311,8 @@ RETURNS TEXT AS $$
         None,
         'id','class',0.01,'explicit',10,0,0,1)
     plpy.info(str(rt.__rt_display(MADlibSchema, 'trained_tree_rt_madelon')))
+    plpy.execute("drop table if exists rt_result_madelon")
+    rt.__rt_predict(MADlibSchema, 'trained_tree_rt_madelon','rt_madelon_test','rt_result_madelon',1)
+    plpy.info(str(rt.__caculate_error(MADlibSchema,'rt_result_madelon','rt_result_madelon','class')))
+
 $$ LANGUAGE PLPYTHONU;

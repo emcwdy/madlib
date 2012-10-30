@@ -1904,7 +1904,10 @@ def __caculate_error(
                AS avg_error
         FROM {result_tbl_name} r, {prediction_tbl_name} p
         WHERE r.id = p.id
-        """)
+        """.format(
+            predict_val_name = predict_val_name,
+            result_tbl_name = result_tbl_name,
+            prediction_tbl_name = prediction_tbl_name))
     return util.__get_query_value(t, 'avg_error')
 
 

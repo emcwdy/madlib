@@ -223,15 +223,28 @@ CREATE OR REPLACE FUNCTION MADLIB_SCHEMA.rt_test_golf
 RETURNS TEXT AS $$
     PythonFunctionBodyOnly(`cart', `rt')
     plpy.execute("drop table if exists trained_tree_rt")
+    rt.__rt_train(MADlibSchema, 'const_value', 'golf_rt_test', 'trained_tree_rt',
+        'golf_rt_test', 'temperature,humidity', None, 'id',
+        'predict_val', 0.01, 'explicit', 10, 0.001, 0.01, 1)
+    
+    plpy.execute("drop table if exists trained_tree_rt")
+    res_train = rt.__rt_train(MADlibSchema, 'const_value', 'golf_rt_test', 'trained_tree_rt',
+        'golf_rt_test', None, 'outlook,temperature,humidity,windy', 'id',
+        predict_val', 0.01, 'explicit', 10, 0.001, 0.01, 1)
+
+    plpy.execute("drop table if exists trained_tree_rt")
+    res_train = rt.__rt_train(MADlibSchema, 'const_value', 'golf_rt_test', 'trained_tree_rt',
+        'golf_rt_test', 'temperature,humidity', 'outlook,temperature,humidity,windy', 'id',
+        'predict_val', 0, 'explicit', 10, 0, 0, 1)
+
+    plpy.execute("drop table if exists trained_tree_rt")
     res_train = rt.__rt_train(MADlibSchema, 'const_value', 'golf_rt_test', 'trained_tree_rt',
         'golf_rt_test', 'temperature,humidity', 'outlook,temperature,humidity,windy', 'id',
         'predict_val', 0.01, 'explicit', 10, 0.001, 0.01, 1)
-    plpy.info(str(res_train))
 
     plpy.execute("DROP TABLE IF EXISTS result_predict_rt;")
     res_predict = rt.__rt_predict(MADlibSchema, 'trained_tree_rt', 'golf_rt_test',
         'result_predict_rt', 1)
-    plpy.info(str(res_predict))
 
     display = rt.__rt_display(MADlibSchema, 'trained_tree_rt')
     rt.__rt_clean(MADlibSchema, 'trained_tree_rt')

@@ -1839,11 +1839,12 @@ def __validate_provided_columns(
                 all_feature_array,
                 training_tbl_name),
             ('each feature in feature names must be a ' +
-                'column of the training table'))
-        util.__assert(
-            set(cont_feature_array) <= set(all_feature_array),
-            ('each feature int continuous feature names must be in the ' +
-             'feature names'))
+             'column of the training table'))
+        if cont_feature_array is not None:
+            util.__assert(
+                set(cont_feature_array) <= set(all_feature_array),
+                ('each feature int continuous feature names must be in the ' +
+                 'feature names'))
 
 
 def __rt_clean(madlib_schema, rt_tbl_name):

@@ -299,7 +299,7 @@ RETURNS TEXT AS $$
     res_predict = rt.__rt_predict(MADlibSchema, 'trained_tree_rt_kddcup', training_name,
         'result_predict_rt_kddcup', 1)
     plpy.info('predicting time:'+str(res_predict.prediction_time))
-    plpy.info("error:"+str(rt.__caculate_error(MADlibSchema,'result_predict_rt_kddcup','rt_kddcup','predict_val')))
+    plpy.info("error:"+str(rt.__caculate_error(MADlibSchema,'result_predict_rt_kddcup','kddcup_rt','predict_val')))
     return rt.__rt_display(MADlibSchema, 'trained_tree_rt_kddcup')
 $$ LANGUAGE PLPYTHONU;
 

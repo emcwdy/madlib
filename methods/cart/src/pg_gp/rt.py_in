@@ -255,7 +255,6 @@ def __rt_train(
         plpy.info(
             ('total training time(breakup, encode):' + 
             str(datetime.datetime.now() - begin_train)))
-    
     return result
 
 
@@ -1352,7 +1351,9 @@ def __find_best_split(
         rt_code = 2
     else:
         plpy.error("rt_type must be 'const_value' or 'model'.")
-
+    
+    # Generate the best split table, including the info of the best split 
+    # feature for the node.
     plpy.execute(
         "DROP TABLE IF EXISTS {split_tbl_name}".format(
             split_tbl_name = split_tbl_name))
@@ -1502,7 +1503,7 @@ def __gen_avs(
         plpy.info(('create node info time:' + 
             str(datetime.datetime.now() - begin_t)))
     # First, generate the avs for discrete column and the continuous column
-    # need further precessing.
+    # need further processing.
     select_stmt = """
         SELECT fid,
                fval,
@@ -1522,6 +1523,7 @@ def __gen_avs(
             enc_tbl_name = enc_tbl_name,
             cur_tr_table = cur_tr_table)
     
+    # Generate the avs table for both discrete feature and continuous feature. 
     plpy.execute(
         "DROP TABLE IF EXISTS {avs_tbl_name};".format(
             avs_tbl_name = avs_tbl_name))
@@ -1614,7 +1616,7 @@ def __gen_enc_meta_names(madlib_schema, result_tree_tbl_name):
 
     @param madlib_schema        The name of the madlib schema
     @param result_tree_tbl_name The name of the table where the resulting DT
-           will be kept.
+                                will be kept.
     """
     # the maximu length of an identifier is 63
     # encoding table name convension: <schema name>_<table name>_ed
@@ -1895,8 +1897,11 @@ def __caculate_error(
     """
     @brief Caculate the average of the sum of square error.
 
-    @param
-
+    @param madlib_schema        The name of the madlib schema.
+    @param result_tbl_name      Specify the predicting result table.
+    @param prediction_tbl_name  Specify the prediction table.
+    @param predict_val_name     Specify the predict value name in the 
+                                prediction table
     """
     t = plpy.execute(
         """

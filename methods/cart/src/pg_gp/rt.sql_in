@@ -222,6 +222,7 @@ CREATE OR REPLACE FUNCTION MADLIB_SCHEMA.rt_test_golf
     )
 RETURNS TEXT AS $$
     PythonFunctionBodyOnly(`cart', `rt')
+    plpy.execute("drop table if exists trained_tree_rt")
     res_train = rt.__rt_train(MADlibSchema, 'const_value', 'golf_rt_test', 'trained_tree_rt',
         'golf_rt_test', 'temperature,humidity', 'outlook,temperature,humidity,windy', 'id',
         'predict_val', 0.01, 'explicit', 10, 0.001, 0.01, 1)
@@ -264,6 +265,7 @@ CREATE OR REPLACE FUNCTION MADLIB_SCHEMA.rt_test
     )
 RETURNS TEXT AS $$
     PythonFunctionBodyOnly(`cart', `rt')
+    plpy.execute("drop table if exists trained_tree_rt_kddcup")
     res_train = rt.__rt_train(MADlibSchema, 'const_value', training_name, 'trained_tree_rt_kddcup',
         None, 
         'duration,src_bytes,dst_bytes,wrong_fragment,urgent,hot,num_failed_logins,num_compromised,'+\
@@ -284,6 +286,7 @@ RETURNS TEXT AS $$
     res_predict = rt.__rt_predict(MADlibSchema, 'trained_tree_rt_kddcup', training_name,
         'result_predict_rt_kddcup', 1)
     plpy.info('predicting time:'+str(res_predict.prediction_time))
+    plpy.info("error:"+str(rt.__caculate_error(MADlibSchema,'result_predict_rt_kddcup','rt_kddcup','predict_val')))
     return rt.__rt_display(MADlibSchema, 'trained_tree_rt_kddcup')
 $$ LANGUAGE PLPYTHONU;
 

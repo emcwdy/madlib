@@ -2285,7 +2285,7 @@ def __treemodel_classify_internal(
     metatable_name = __get_metatable_name(madlib_schema, tree_table_name)
     h2hmv_routine_id = __get_routine_id(madlib_schema, tree_table_name)
 
-    preproc.__encode_table_classify(
+    preproc.__encode_classification_table(
         madlib_schema,
         classification_table_name,
         encoded_table_name,
@@ -2548,7 +2548,7 @@ def __treemodel_classify_internal_serial(
     metatable_name = __get_metatable_name(madlib_schema, tree_table_name)
     h2hmv_routine_id = __get_routine_id(madlib_schema, tree_table_name)
 
-    preproc.__encode_table_classify(
+    preproc.__encode_classification_table(
         madlib_schema,
         classification_table_name,
         encoded_table_name,
@@ -3053,14 +3053,17 @@ def __gen_enc_meta_names(
             is the encoded table name and the second is the meta table name.
     """
     table_names = ["", ""]
-    t = plpy.execute(
-        """
-        SELECT {madlib_schema}.__get_schema_name
-        ('{result_table_name}') AS schema_name         
-        """.format(
-            madlib_schema = madlib_schema,
-            result_table_name = result_table_name))
-    result_schema_name = util.__get_query_value(t, "schema_name")
+    #t = plpy.execute(
+    #    """
+    #    SELECT {madlib_schema}.__get_schema_name
+    #    ('{result_table_name}') AS schema_name         
+    #    """.format(
+    #        madlib_schema = madlib_schema,
+    #        result_table_name = result_table_name))
+    #result_schema_name = util.__get_query_value(t, "schema_name")
+    result_schema_name = util.__get_schema_name(
+        madlib_schema, 
+        result_table_name)
 
     # the maximum length of an identifier 63
     # encoding table name convension:  <schema name>_<table name>_ed
@@ -3302,7 +3305,7 @@ def __encode_and_train(
             tree_table_name,
             error_msg)
         
-        preproc.__encode_table_training(
+        preproc.__encode_training_table(
             madlib_schema,
             training_table_name,
             id_col_name, 

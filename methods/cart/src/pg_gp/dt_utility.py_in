@@ -114,17 +114,17 @@ def __column_exists(madlib_schema, full_table_name, column_name):
         "the table name and column name must not be null")
 
     if __table_exists(madlib_schema, full_table_name):
-        curstmt = """
+        t = plpy.execute(
+            """
             SELECT COUNT(*) AS count
             FROM pg_catalog.pg_attribute
             WHERE attnum > 0 AND
-            (NOT attisdropped) AND
-            attname  = '{column_name}' AND
-            attrelid = '{full_table_name}'::regclass
+                  NOT attisdropped AND
+                  attname  = '{column_name}' AND
+                  attrelid = '{full_table_name}'::regclass
             """.format(
                 column_name = column_name,
-                full_table_name = full_table_name)
-        t = plpy.execute(curstmt) 
+                full_table_name = full_table_name))
         result = __get_query_value(t, "count")
         return result >= 1
 
@@ -179,7 +179,6 @@ def __strip_schema_name(full_table_name):
         "table name should not be null")
 
     str_val_array = full_table_name.split(".")
-
     if len(str_val_array) == 1:
         str_val = full_table_name
     elif len(str_val_array) == 2:
@@ -207,19 +206,21 @@ def __assert_table(madlib_schema, full_table_name, existence):
     @param full_table_name    The table name.
     @param existence          whether the table exists or not.
     """
-    plpy.execute(
-        """
-        SELECT {madlib_schema}.__assert_table('{table_name}','{exist}')
-        """.format(
-            madlib_schema = madlib_schema,
-            table_name = full_table_name,
-            exist = existence))
+    if existence:
+        err_msg = "assertion failure. Table: '" + str(full_table_name) + \
+            "' does not exist"
+    else:
+        err_msg = "assertion failure. Table: '" + str(full_table_name) + \
+            "' already exists"
+    __assert(
+        __table_exists(madlib_schema, full_table_name) == existence,
+        err_msg)
 
 
 def __columns_in_table(
     madlib_schema,
     column_names,
-    training_table_name):
+    table_name):
     """
     @brief Test if each element in the given array is a column of the table.
  
@@ -230,12 +231,76 @@ def __columns_in_table(
     """
     t = plpy.execute(
         """
-        SELECT {madlib_schema}.__columns_in_table(
-            {column_names},
-            '{training_table_name}'
-        ) AS existence
+        SELECT count(*) AS count
+        FROM
+        (
+            SELECT unnest({column_names})
+            EXCEPT
+            SELECT attname
+            FROM pg_attribute
+            WHERE attrelid = '{table_name}'::regclass AND
+                  attnum > 0 AND
+                  NOT attisdropped
+        ) t
         """.format(
-            madlib_schema = madlib_schema,
             column_names = __list_to_sql(column_names),
-            training_table_name = training_table_name))
-    return __get_query_value(t, "existence")
+            table_name = table_name))
+    count = __get_query_value(t, 'count')
+    if count == 0:
+        return True
+    else:
+        return False
+
+
+def __get_schema_name(madlib_schema, full_table_name):
+    """
+    @brief  Get the schema name from a full table name.
+            if there is no schema name in the full table name, then
+            if the table exists, we return the schdema name from catalog
+            else the current schema name,
+            else return the schema name from the full table name directly.
+
+    @param  full_table_name The full table name.
+
+    @return The schema name of the table.
+    """
+    __assert(
+        full_table_name is not None,
+        "table name should not be null")
+
+    temp = __str_to_array(full_table_name, '.')
+    length = len(temp)
+
+    if length == 1:
+        # if table exists, return the schema name from catalog
+        if __table_exists(full_table_name):
+            t = plpy.execute(
+                """
+                SELECT nspname
+                FROM pg_catalog.pg_namespace n
+                WHERE n.oid = 
+                (
+                    SELECT relnamespace 
+                    FROM pg_catalog.pg_class
+                    WHERE oid = '{full_table_name}'::regclass
+                )
+                """.format(
+                    full_table_name = full_table_name))
+            schema_name = __get_query_value(t, 'nspname')
+        else:
+            # get the current schema name.
+            t = plpy.execute(
+                """
+                SELECT current_schema() AS schema
+                """)
+            schema_name = __get_query_value(t, 'schema')
+    else:
+        __assert(
+            length == 2,
+            "wrong full table name <" + str(full_table_name) + ">")
+        # get the schema name directly
+        schema_name = temp[0].strip().lower()
+
+    return schema_name
+
+

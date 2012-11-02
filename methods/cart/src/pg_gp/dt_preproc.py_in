@@ -582,7 +582,6 @@ def __breakup_table(
     plpy.execute(
         "DROP TABLE IF EXISTS {breakup_tbl_name}".format(
             breakup_tbl_name = breakup_tbl_name))
-
 m4_changequote(`>>>', `<<<')
 m4_ifdef(>>>__GREENPLUM_GE_4_2_1__<<<, >>>
     # if the DB is GPDB and its version is greater than or equal
@@ -1001,7 +1000,7 @@ def __gen_horizontal_encoded_table(
             str(datetime.datetime.now() - exec_begin)))
 
 
-def __encode_table_training(
+def __encode_training_table(
         madlib_schema,
         input_tbl_name,
         id_col_name,
@@ -1247,7 +1246,8 @@ m4_changequote(>>>`<<<, >>>'<<<)
     if enc_category == 'classification':
         curstmt = """
             INSERT INTO {meta_tbl_name}
-            SELECT 0 as id,'{cls_col_name}',
+            SELECT 0 as id,
+                   '{cls_col_name}',
                    'c' as column_type,
                    'f'::BOOL,
                    '{kv_cls_name}'::regclass::OID,
@@ -1303,7 +1303,7 @@ m4_changequote(>>>`<<<, >>>'<<<)
         plpy.info("time of encoding: " + encode_time) 
  
 
-def __encode_table_classify(
+def __encode_classification_table(
         madlib_schema,
         input_tbl_name,
         enc_tbl_name,

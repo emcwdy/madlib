@@ -33,7 +33,7 @@ import dt_utility as util
 import dt_preproc as preproc
 import plpy
 
-def __rt_train(
+def rt_train(
         madlib_schema,
         rt_type,
         training_tbl_name,
@@ -157,7 +157,7 @@ def __rt_train(
     all_feature_array = util.__str_to_array(feature_col_names, ',')
  
     # Check the common params
-    __check_common_params(
+    __check_params(
         madlib_schema,
         rt_type, 
         training_tbl_name,
@@ -178,9 +178,10 @@ def __rt_train(
         all_feature_array,
         id_col_name,
         val_col_name)
-    plpy.info(
-        ('validate provided columns time:' + 
-         str(datetime.datetime.now() - begin_t)))
+    if verbosity > 0:
+        plpy.info(
+            ('validate provided columns time:' + 
+             str(datetime.datetime.now() - begin_t)))
 
     if how2hmv == 'ignore':
         h2hmv_routine_id = 1
@@ -199,7 +200,7 @@ def __rt_train(
     
     # encode the training table
     begin_t = datetime.datetime.now()
-    preproc.__encode_table_training(
+    preproc.__encode_training_table(
         madlib_schema,
         training_tbl_name,
         id_col_name,
@@ -234,7 +235,7 @@ def __rt_train(
         num_fids,
         1)
 
-    # train the tree with the info of encoding table.
+    # train the regression tree with the encoded table.
     result =  __train_tree(
         madlib_schema,
         rt_type,
@@ -258,7 +259,7 @@ def __rt_train(
     return result
 
 
-def __check_common_params(
+def __check_params(
         madlib_schema,
         rt_type, 
         training_tbl_name,
@@ -714,7 +715,7 @@ def __generate_final_tree(
         """.format(result_tree_tbl_name = result_tree_tbl_name))
 
 
-def __rt_display(madlib_schema, rt_tbl_name):
+def rt_display(madlib_schema, rt_tbl_name):
     """
     @brief Display the trees in the regression tree with human readable
            format.
@@ -898,7 +899,7 @@ def __display_node_sfunc(
     return ret
 
 
-def __rt_predict(
+def rt_predict(
         madlib_schema,
         tree_tbl_name,
         prediction_tbl_name,
@@ -948,9 +949,9 @@ def __rt_predict(
         madlib_schema,
         prediction_tbl_name)
 
-    # encode the predictio table for predicting.
+    # encode the prediction table.
     # generate the horizontal encode table
-    preproc.__encode_table_classify(
+    preproc.__encode_classification_table(
         madlib_schema,
         prediction_tbl_name,
         enc_tbl_name,
@@ -1181,7 +1182,7 @@ def __prune_tree(
     plpy.execute(
         "DROP TABLE IF EXISTS " + predict_result)
     begin_t = datetime.datetime.now()
-    __rt_predict(
+    rt_predict(
         madlib_schema,
         result_tree_tbl_name,
         validation_tbl_name,
@@ -1756,7 +1757,7 @@ def __create_tree_table(madlib_schema, result_tree_tbl_name):
             num_of_samples      INTEGER     Number of samples at this node.
             parent_id           INTEGER     ID of the parent branch.
             lmc_nid             INTEGER     The left most child node's ID.
-            lmc_fval             INTEGER     The left most child node's value.
+            lmc_fval            INTEGER     The left most child node's value.
                                             With this field and 'lmc_nid', we
                                             can know the destination node for
                                             a certain sample.
@@ -1847,7 +1848,7 @@ def __validate_provided_columns(
                  'feature names'))
 
 
-def __rt_clean(madlib_schema, rt_tbl_name):
+def rt_clean(madlib_schema, rt_tbl_name):
     """
     @brief  This function deletes those tables storing the regression tree,
             related metadata and temporary tables.
@@ -1890,31 +1891,97 @@ def __rt_clean(madlib_schema, rt_tbl_name):
     return True
 
 
-def __caculate_error(
+def score(
         madlib_schema,
-        result_tbl_name,
-        prediction_tbl_name,
-        predict_val_name):
+        scoring_tbl_name,
+        tree_tbl_name,
+        verbosity):
     """
-    @brief Caculate the average of the sum of square error.
+    @brief This function check the accuracy of the trained regression tree 
+           model by evaluating the root relative squared error.
+           The root relative squared error is relative to what it would have 
+           been if a simple predictor had been used. More specifically, this 
+           simple predictor is just the average of the actual values. Thus, 
+           the relative squared error takes the total squared error and 
+           normalizes it by dividing by the total squared error of the simple 
+           predictor. By taking the square root of the relative squared error 
+           one reduces the error to the same dimensions as the quantity being 
+           predicted.
 
-    @param madlib_schema        The name of the madlib schema.
-    @param result_tbl_name      Specify the predicting result table.
-    @param prediction_tbl_name  Specify the prediction table.
-    @param predict_val_name     Specify the predict value name in the 
-                                prediction table
+           E = sqrt(sum(pow(predict_i - y_i, 2)) / sum(pow(avg(y_i) - y_i ,2)))
+
+    @param madlib_schema    The name of madlib schema.
+    @param scoring_tbl_name Specify the table which is used to check the
+                            accuracy of the regression tree.
+    @param tree_tbl_name    Specify the trained regression tree table.
+    @param verbosity        > 0 means the algorithm run in a verbose mode. 
     """
+    enc_tbl_name = 'rt_predict_internal_edt'
+    result_tbl_name = 'tmp_rt_predict_result'
+    val_col_name = 'predict_val'
+    util.__assert(
+        scoring_tbl_name is not None and
+        util.__table_exists(madlib_schema, scoring_tbl_name),
+        ("The specified scoring table <" + str(scoring_tbl_name) + 
+         "> does not exist."))
+    util.__assert(
+        tree_tbl_name is not None and
+        util.__table_exists(madlib_schema, tree_tbl_name),
+        ("The specified tree table <" + str(tree_tbl_name) + 
+         "> does not exist."))
+
+    util.__assert(
+        util.__column_exists(
+            madlib_schema, scoring_tbl_name,
+            preproc.__get_class_column_name(
+                madlib_schema, dt.__get_metatable_name(
+                    madlib_schema, tree_tbl_name))),
+        ("the specified scoring table <" + scoring_tbl_name +
+         "> does not have class column"))
+    
+    # predict the scoring table
+    rt_predict(
+        madlib_schema,
+        tree_tbl_name,
+        scoring_tbl_name,
+        result_tbl_name,
+        verbosity)
+    
     t = plpy.execute(
         """
-        SELECT SUM(pow(p.{predict_val_name} - r.predict_val,2)) / COUNT(r.id) 
-               AS avg_error
-        FROM {result_tbl_name} r, {prediction_tbl_name} p
-        WHERE r.id = p.id
+        SELECT sqrt
+        (
+            sum
+            (
+                pow
+                (
+                    p.{val_col_name} - s.{val_col_name}, 2    
+                )
+            )
+            /
+            sum
+            (
+                pow
+                (
+                    l.avg - s.{val_col_name}, 2
+                )
+            )
+        ) AS rrse
+        FROM
+        {enc_tbl_name} s,
+        {result_tbl_name} p,
+        (
+            SELECT avg({val_col_name}) AS avg
+            FROM {enc_tbl_name}
+        ) l
+        WHERE s.id = p.id
         """.format(
-            predict_val_name = predict_val_name,
-            result_tbl_name = result_tbl_name,
-            prediction_tbl_name = prediction_tbl_name))
-    return util.__get_query_value(t, 'avg_error')
+            val_col_name = val_col_name,
+            enc_tbl_name = enc_tbl_name,
+            result_tbl_name = result_tbl_name))
+    return util.__get_query_value(t, 'rrse')
+
+
 
 
 

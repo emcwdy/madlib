@@ -297,7 +297,7 @@ RETURNS TEXT AS $$
         'result_predict_rt_kddcup', 1)
     plpy.info('predicting time:'+str(res_predict.prediction_time))
  
-    score = rt.score(MADlibSchema,training_name,'trained_tree_rt',0)
+    score = rt.score(MADlibSchema,training_name,'trained_tree_rt_kddcup',0)
     plpy.info("score(root relative squared error):" + str(score))
 
     return rt.rt_display(MADlibSchema, 'trained_tree_rt_kddcup')

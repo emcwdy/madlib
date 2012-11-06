@@ -8,7 +8,6 @@
 
 @namespace dt_preproc
 """
-
 m4_include(`SQLCommon.m4')
 
 m4_ifelse(
@@ -34,7 +33,6 @@ m4_ifelse(
     ), 1, 
     `m4_define(`__GREENPLUM_GE_4_2_1__')'
 )
-
 
 import plpy
 import dt_utility as util
@@ -537,11 +535,12 @@ def __breakup_table(
         kv_cls_name,
         id_col_name,
         cls_col_name,
+        cls_is_cont,
+        cls_col_enc_name,
         attr_col_names,
         is_conts,
         h2hmv_routine_id,
-        verbosity,
-        enc_category):
+        verbosity):
     """
     @brief breakup each record from the training table.
            For example, we have the training table t(id, f1, f2, f3, class),
@@ -586,10 +585,12 @@ m4_changequote(`>>>', `<<<')
 m4_ifdef(>>>__GREENPLUM_GE_4_2_1__<<<, >>>
     # if the DB is GPDB and its version is greater than or equal
     # to 4.2, then we will use RLE compression for the encoded table.
-    if enc_category == 'classification':
-        class_clause = 'class   INT    ENCODING (compresstype=RLE_TYPE)'
-    elif enc_category == 'regression': 
-        class_clause = 'predict_val   FLOAT  ENCODING (compresstype=RLE_TYPE)'
+    if cls_is_cont:
+        class_clause = (cls_col_enc_name + 
+                        '   FLOAT  ENCODING (compresstype=RLE_TYPE)')
+    else:
+        class_clause = (cls_col_enc_name + 
+                        '   INT    ENCODING (compresstype=RLE_TYPE)')
     curstmt = """
         CREATE TEMP TABLE {breakup_tbl_name}
         (             
@@ -605,10 +606,10 @@ m4_ifdef(>>>__GREENPLUM_GE_4_2_1__<<<, >>>
             breakup_tbl_name = breakup_tbl_name,
             class_clause = class_clause)
 <<<, >>>
-    if enc_category == 'classification':
-        class_clause = 'class   INT'
-    elif enc_category == 'regression':
-        class_clause = 'predict_val FLOAT'
+    if cls_is_cont:    
+        class_clause = cls_col_enc_name + ' FLOAT'
+    else:
+        class_clause = cls_col_enc_name + ' INT'
     curstmt = """
         CREATE TEMP TABLE {breakup_tbl_name}
         (
@@ -644,19 +645,14 @@ m4_changequote(>>>`<<<, >>>'<<<)
             END
             """ 
 
-    if enc_category == 'classification':
-        class_txt = 'class'
-    elif enc_category == 'regression':
-        class_txt = 'predict_val'
-
     if cls_col_name is None:
         # if the kv_cls_name is null, then the class column will be null
         curstmt = """
             INSERT INTO {breakup_tbl_name}
             (
-                id, fid, fval, is_cont, {class_txt}
+                id, fid, fval, is_cont, {cls_col_enc_name}
             )
-            SELECT id, fid, {fval_txt} as fval, is_cont, {class_txt}
+            SELECT id, fid, {fval_txt} as fval, is_cont, {cls_col_enc_name}
             FROM
             (
                 SELECT {id_col_name},
@@ -669,7 +665,7 @@ m4_changequote(>>>`<<<, >>>'<<<)
                            ]
                        ) AS fval,
                        unnest(array['{is_conts}'::BOOL]::BOOL[]) as is_cont, 
-                       NULL AS {class_txt}
+                       NULL AS {cls_col_enc_name}
                 FROM {input_tbl_name} t1
             ) t
             {where_txt}
@@ -683,13 +679,20 @@ m4_changequote(>>>`<<<, >>>'<<<)
                     madlib_schema = madlib_schema).join(
                         util.__coalesce(name, "null") 
                         for name in attr_col_names),
-                    is_conts = "','".join(str(cont) for cont in is_conts),
-                    input_tbl_name = input_tbl_name,
-                    where_txt = where_txt,
-                    class_txt = class_txt)
+                is_conts = "','".join(str(cont) for cont in is_conts),
+                input_tbl_name = input_tbl_name,
+                where_txt = where_txt,
+                cls_col_enc_name = cls_col_enc_name)
     else:
-        if enc_category == "classification":
-            class_sql = "code as class"
+        if cls_is_cont:
+            class_sql = "{cls_col_name} AS {cls_col_enc_name}".format(
+                cls_col_name = cls_col_name,
+                cls_col_enc_name = cls_col_enc_name)
+            where_sql = ""
+            from_sql = "{input_tbl_name}".format(
+                input_tbl_name = input_tbl_name)
+        else:
+            class_sql = "code AS " + cls_col_enc_name
             where_sql = """
                 WHERE {madlib_schema}.__to_char(
                     t1.{cls_col_name}
@@ -700,19 +703,13 @@ m4_changequote(>>>`<<<, >>>'<<<)
             from_sql = "{input_tbl_name} t1, {kv_cls_name} t2".format(
                 input_tbl_name = input_tbl_name,
                 kv_cls_name = kv_cls_name)
-        elif enc_category == "regression":
-            class_sql = "{cls_col_name} as predict_val".format(
-                cls_col_name = cls_col_name)
-            where_sql = ""
-            from_sql = "{input_tbl_name}".format(
-                input_tbl_name = input_tbl_name)
 
         curstmt = """
             INSERT INTO {breakup_tbl_name}
             (
-                id, fid, fval, is_cont, {class_txt}
+                id, fid, fval, is_cont, {cls_col_enc_name}
             )
-            SELECT id, fid, {fval_txt} as fval, is_cont, {class_txt}
+            SELECT id, fid, {fval_txt} as fval, is_cont, {cls_col_enc_name}
             FROM
             (
                 SELECT {id_col_name},
@@ -745,11 +742,11 @@ m4_changequote(>>>`<<<, >>>'<<<)
                     is_conts = ",".join(
                         ("'" + str(is_cont) + "'::BOOL") 
                         for is_cont in is_conts),
-                    class_sql = class_sql,
-                    from_sql = from_sql,
-                    where_sql = where_sql,
-                    where_txt = where_txt,
-                    class_txt = class_txt)   
+                class_sql = class_sql,
+                from_sql = from_sql,
+                where_sql = where_sql,
+                where_txt = where_txt,
+                cls_col_enc_name = cls_col_enc_name)   
     plpy.execute(curstmt)
 
     if verbosity > 0:
@@ -765,8 +762,9 @@ def __gen_vertical_encoded_table(
         enc_tbl_name,
         kv_attr_name,
         is_tbl_tmp,
-        verbosity,
-        enc_category):
+        cls_is_cont,
+        cls_col_enc_name,
+        verbosity):
     """
     @brief Generate the vertical encoded table from the breakup table.
 
@@ -786,16 +784,14 @@ def __gen_vertical_encoded_table(
                                temp one.
     @param verbosity           > 0 means this function runs in verbose mode.
     """
-    tmp_txt = ""
+    tmp_txt = ''
     if is_tbl_tmp:
-        tmp_txt = "TEMP"
+        tmp_txt = ''
 
-    if enc_category == 'classification':
-        class_txt = 'class'
+    if cls_is_cont:
+        class_type = 'FLOAT8'
+    else:
         class_type = 'INT'
-    elif enc_category == 'regression':
-        class_txt = 'predict_val'
-        class_type = 'FLOAT'
 
     plpy.execute("DROP TABLE IF EXISTS " + enc_tbl_name)
 m4_changequote(`>>>', `<<<')
@@ -807,14 +803,14 @@ m4_ifdef(>>>__GREENPLUM_GE_4_2_1__<<<, >>>
             fid     INT     ENCODING (compresstype=RLE_TYPE),
             fval    FLOAT8  ENCODING (compresstype=RLE_TYPE),
             is_cont BOOL    ENCODING (compresstype=RLE_TYPE),
-            {class_txt} {class_type} ENCODING (compresstype=RLE_TYPE)
+            {cls_col_enc_name} {class_type} ENCODING (compresstype=RLE_TYPE)
         )
         WITH(appendonly=true, orientation=column)
         DISTRIBUTED BY(id)
         """.format(
             tmp_txt = tmp_txt,
             enc_tbl_name = enc_tbl_name,
-            class_txt = class_txt,
+            cls_col_enc_name = cls_col_enc_name,
             class_type = class_type)
 <<<, >>>
     curstmt = """
@@ -824,13 +820,13 @@ m4_ifdef(>>>__GREENPLUM_GE_4_2_1__<<<, >>>
             fid     INT,
             fval    FLOAT8,
             is_cont BOOL,
-            {class_txt}   {class_type}
+            {cls_col_enc_name}   {class_type}
         )
         m4_ifdef(`__GREENPLUM__', `DISTRIBUTED BY (id)')
         """.format(
             tmp_txt = tmp_txt,
             enc_tbl_name = enc_tbl_name,
-            class_txt = class_txt,
+            cls_col_enc_name = cls_col_enc_name,
             class_type = class_type)
 <<<)
 m4_changequote(>>>`<<<, >>>'<<<)
@@ -841,15 +837,16 @@ m4_changequote(>>>`<<<, >>>'<<<)
     # Generating the encoded table through join the breakup table with
     # the KV table for all the features
     curstmt = """
-        INSERT INTO {enc_tbl_name}(id, fid, fval, is_cont, {class_txt})
+        INSERT INTO {enc_tbl_name}(id, fid, fval, is_cont, {cls_col_enc_name})
         SELECT p.id AS id, p.fid AS fid,
-               CASE WHEN (p.is_cont AND p.fval IS NOT NULL) THEN
-                     p.fval::FLOAT8
-               ELSE
-                     m.code::FLOAT8
+               CASE WHEN (p.is_cont AND p.fval IS NOT NULL) 
+                    THEN
+                        p.fval::FLOAT8
+                    ELSE
+                        m.code::FLOAT8
                END AS fval,
                p.is_cont AS is_cont,
-               p.{class_txt}::{class_type} AS {class_txt} 
+               p.{cls_col_enc_name}::{class_type} AS {cls_col_enc_name} 
         FROM
              {breakup_tbl_name} p LEFT JOIN {kv_attr_name} m
         ON   m.fid = p.fid AND
@@ -858,7 +855,7 @@ m4_changequote(>>>`<<<, >>>'<<<)
             enc_tbl_name = enc_tbl_name,
             breakup_tbl_name = breakup_tbl_name,
             kv_attr_name = kv_attr_name,
-            class_txt = class_txt,
+            cls_col_enc_name = cls_col_enc_name,
             class_type = class_type)
     if verbosity > 0:
         plpy.info(curstmt)
@@ -955,8 +952,9 @@ def __gen_horizontal_encoded_table(
         hor_tbl_name,
         ver_tbl_name,
         attr_count,
-        verbosity,
-        enc_category='classification'):
+        cls_is_cont,
+        cls_col_enc_name,
+        verbosity):
     """
     @brief Generate the horizontal table from a given vertical table.
 
@@ -968,20 +966,17 @@ def __gen_horizontal_encoded_table(
     exec_begin = datetime.datetime.now()
 
     plpy.execute("DROP TABLE IF EXISTS " + hor_tbl_name)
-    if enc_category == 'classification':
-        class_txt = 'class'
+    if cls_is_cont:
+        class_type = 'FLOAT8'
+    else:
         class_type = 'INT'
-    elif enc_category == 'regression':
-        class_txt = 'predict_val'
-        class_type = 'FLOAT'
-
     curstmt = """
-        CREATE TEMP TABLE {hor_tbl_name}(id, fvals, {class_txt}) AS
+        CREATE TEMP TABLE {hor_tbl_name}(id, fvals, {cls_col_enc_name}) AS
         SELECT
                id,
                {madlib_schema}.__array_indexed_agg(fval, {attr_count}, fid)
                AS fvals,
-               min({class_txt})::{class_type} AS {class_txt}
+               min({cls_col_enc_name})::{class_type} AS {cls_col_enc_name}
         FROM {ver_tbl_name}
         GROUP BY id
         m4_ifdef(`__GREENPLUM__', `DISTRIBUTED BY (id)')
@@ -990,7 +985,7 @@ def __gen_horizontal_encoded_table(
             hor_tbl_name = hor_tbl_name,
             attr_count = attr_count,
             ver_tbl_name = ver_tbl_name,
-            class_txt = class_txt,
+            cls_col_enc_name = cls_col_enc_name,
             class_type = class_type)
     plpy.execute(curstmt)
     
@@ -1006,12 +1001,13 @@ def __encode_training_table(
         id_col_name,
         feature_names,
         cls_col_name,
+        cls_is_cont,
+        cls_col_enc_name,
         cont_attr_names,
         enc_table_name,
         meta_tbl_name,
         h2hmv_routine_id,
-        verbosity,
-        enc_category="classification"):
+        verbosity):
     """
     @breif Encode a tabular table.
 
@@ -1020,7 +1016,13 @@ def __encode_training_table(
     @param feature_names         An array contains all the feature. If it's 
                                  null, we will get all the columns of the
                                  input table.
-    @param class_column_name     The name of class column.
+    @param cls_col_name          The name of class column.
+    @param cls_is_cont           Specify the class or predict value column is
+                                 continuous. If this param is true, this
+                                 function is used for encoding for regression
+                                 tree, or it is for C45 or random forest
+    @param cls_col_enc_name      Specify the name of class or predict value 
+                                 column after encoding.
     @param cont_column_names     An array contains all the continuous feature.
                                  Null means no continuous feature.
     @param encoded_table_name    The full name of the encoded table.
@@ -1028,13 +1030,6 @@ def __encode_training_table(
     @param h2hmv_routine_id      The ID of the routine which specifies
                                  How to handle missing value(h2hmv).
     @param verbosity             > 0 means this function runs in verbose mode.
-    @param enc_category          The encode category, default value is
-                                 'classification', the other value is
-                                 'regression'.
-                                 We encode class column for classification,
-                                 but it is not necessary for regression,
-                                 because the class column of regression must
-                                 be continuous.
     
     @return The full name of the encoded table.
 
@@ -1084,11 +1079,11 @@ m4_ifdef(`__HAS_ORDERED_AGGREGATES__', >>>
             (
                 SELECT attname
                 FROM   pg_attribute
-                WHERE   attrelid = '{input_tbl_name}'::regclass AND 
-                        attnum > 0 AND
-                        attname <> '{id_col_name}' AND
-                        attname <> '{cls_col_name}' AND
-                        NOT attisdropped
+                WHERE  attrelid = '{input_tbl_name}'::regclass AND 
+                       attnum > 0 AND
+                       attname <> '{id_col_name}' AND
+                       attname <> '{cls_col_name}' AND
+                       NOT attisdropped
                 ORDER BY attname
                 LIMIT ALL
             ) AS arr_attname
@@ -1102,6 +1097,7 @@ m4_ifdef(`__HAS_ORDERED_AGGREGATES__', >>>
 m4_changequote(>>>`<<<, >>>'<<<) 
     else:
         attr_col_names = sorted(feature_names)
+    
     # an array contains if a feature is continuous or not
     # the subscript is corresponding to the feature's ID
     if cont_attr_names is not None:
@@ -1119,7 +1115,7 @@ m4_changequote(>>>`<<<, >>>'<<<)
 
     # Create the KV table for the class column.
     # Encode class column for classification.
-    if enc_category == "classification":
+    if not cls_is_cont:
         plpy.execute("DROP TABLE IF EXISTS " + kv_cls_name)
         curstmt = """
             CREATE TABLE {kv_cls_name} AS
@@ -1141,7 +1137,6 @@ m4_changequote(>>>`<<<, >>>'<<<)
         if verbosity > 0:
             plpy.info(curstmt)
         plpy.execute(curstmt)
-
     ret.gen_kv_time = datetime.datetime.now() - exec_begin
     exec_begin = datetime.datetime.now()
 
@@ -1154,12 +1149,12 @@ m4_changequote(>>>`<<<, >>>'<<<)
         kv_cls_name,
         id_col_name,
         cls_col_name,
+        cls_is_cont,
+        cls_col_enc_name,
         attr_col_names,
         is_conts,
         h2hmv_routine_id,
-        verbosity,
-        enc_category)
-    
+        verbosity)
     ret.breakup_tbl_time = datetime.datetime.now() - exec_begin
     exec_begin = datetime.datetime.now()
     
@@ -1171,7 +1166,6 @@ m4_changequote(>>>`<<<, >>>'<<<)
         breakup_tbl_name,
         h2hmv_routine_id,
         verbosity)
-
     ret.gen_kv_time = ret.gen_kv_time + (datetime.datetime.now() - exec_begin)
     exec_begin = datetime.datetime.now()
 
@@ -1183,9 +1177,9 @@ m4_changequote(>>>`<<<, >>>'<<<)
         enc_table_name,
         kv_attr_name,
         False,
-        verbosity,
-        enc_category)
-
+        cls_is_cont,
+        cls_col_enc_name,
+        verbosity)
     ret.gen_enc_time = datetime.datetime.now() - exec_begin
     exec_begin = datetime.datetime.now()
 
@@ -1243,7 +1237,23 @@ m4_changequote(>>>`<<<, >>>'<<<)
     # as we know, the classification tree need kv_class_tbl, and regression
     # tree does not need, so we put the classification tree kv_cls_name into
     # metatable
-    if enc_category == 'classification':
+    if cls_is_cont:
+        curstmt = """
+            INSERT INTO {meta_tbl_name}
+                (id, column_name, column_type, is_cont, table_oid, num_dist_value)
+            VALUES
+            (    
+                0,   
+                '{cls_col_name}',
+                'c', 
+                't'::BOOL,
+                NULL,
+                NULL 
+            )    
+            """.format(
+                meta_tbl_name = meta_tbl_name,
+                cls_col_name = cls_col_name)
+    else:
         curstmt = """
             INSERT INTO {meta_tbl_name}
             SELECT 0 as id,
@@ -1258,22 +1268,6 @@ m4_changequote(>>>`<<<, >>>'<<<)
                 meta_tbl_name = meta_tbl_name,
                 cls_col_name = cls_col_name,
                 kv_cls_name = kv_cls_name)
-    elif enc_category == 'regression':
-        curstmt = """
-            INSERT INTO {meta_tbl_name}
-            (id, column_name, column_type, is_cont, table_oid, num_dist_value)
-            VALUES
-            (
-                0,
-                '{cls_col_name}',
-                'c',
-                't'::BOOL,
-                NULL,
-                NULL
-            )
-            """.format(
-                meta_tbl_name = meta_tbl_name,
-                cls_col_name = cls_col_name)
     plpy.execute(curstmt)
     
     # put the id's meta information to the metatable
@@ -1309,8 +1303,9 @@ def __encode_classification_table(
         enc_tbl_name,
         meta_tbl_name,
         h2hmv_routine_id,
-        verbosity,
-        enc_category='classification'):
+        cls_is_cont,
+        cls_col_enc_name,
+        verbosity):
     """
     @brief Encode a tabular table for classification/scoring.
 
@@ -1414,7 +1409,7 @@ m4_changequote(>>>`<<<, >>>'<<<)
 
     # encode class label for classification whose class label is discrete.
     kv_cls_name = ''
-    if enc_category == 'classification':
+    if not cls_is_cont:
         curstmt = """
             SELECT {madlib_schema}.__regclass_to_text(table_oid) AS table_name
             FROM {meta_tbl_name}
@@ -1442,26 +1437,24 @@ m4_changequote(>>>`<<<, >>>'<<<)
         kv_cls_name,
         id_col_name,
         cls_col_name,
+        cls_is_cont,
+        cls_col_enc_name,
         attr_col_names,
         is_conts,
         h2hmv_routine_id,
-        verbosity,
-        enc_category)
+        verbosity)
 
     # generate the vertical encoded table.
-    ver_enc_tbl_name = ''
-    if enc_category == 'classification':
-        ver_enc_tbl_name = 'dt_tmp_ver_table'
-    elif enc_category == 'regression':
-        ver_enc_tbl_name = 'rt_tmp_ver_table'
+    ver_enc_tbl_name = 'tmp_ver_table'
     __gen_vertical_encoded_table(
         madlib_schema,
         breakup_tbl_name,
         ver_enc_tbl_name,
         kv_attr_name,
         True,
-        verbosity,
-        enc_category)
+        cls_is_cont,
+        cls_col_enc_name,
+        verbosity)
 
     # generate the horizontal encoded table.
     plpy.execute("DROP TABLE IF EXISTS " + enc_tbl_name)
@@ -1470,8 +1463,9 @@ m4_changequote(>>>`<<<, >>>'<<<)
         enc_tbl_name,
         ver_enc_tbl_name,
         len(is_conts),
-        verbosity,
-        enc_category)
+        cls_is_cont,
+        cls_col_enc_name,
+        verbosity)
 
     plpy.execute("DROP TABLE IF EXISTS dt_tmp_ver_table")
     if verbosity > 0:
@@ -1492,5 +1486,5 @@ def __size_of_table(
         """
         SELECT COUNT(*) AS count
         FROM {full_tbl_name}
-        """.format(full_tbl_name=full_tbl_name))
+        """.format(full_tbl_name = full_tbl_name))
     return util.__get_query_value(t, 'count')

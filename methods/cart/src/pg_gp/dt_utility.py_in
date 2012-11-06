@@ -9,7 +9,6 @@
 
 import plpy
 
-
 def __get_query_value(t, key, i = 0):
     """
     @brief If the ith record which is a dict exists and the dict has the param 

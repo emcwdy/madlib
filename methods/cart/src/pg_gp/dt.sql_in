@@ -1053,19 +1053,19 @@ $$ LANGUAGE PLPYTHONU;
  *        readable format. It is the step function of aggregation named 
  *        __display_tree_aggr.
  *
- * @param state     This variable is used to store the accumulated tree 
- *                  display information.
- * @param depth     The depth of this node. 
- * @param is_cont   Whether the feature used to split is continuous. 
- * @param feat_name The name of the feature used to split.
- * @param curr_val  The value of the splitting feature for this node.
- * @param split_value    For continuous feature, it specifies the split value. 
- *                  Otherwise, it is of no meaning.
- * @param max_prob  For those elements in this node, the probability that
- *                  an element belongs to the max_class.
- * @param max_class The class ID with the largest number of elements 
- *                  for those elements in this node.
- * @param num_of_samples Total count of samples in this node. 
+ * @param state             This variable is used to store the accumulated tree 
+ *                          display information.
+ * @param depth             The depth of this node. 
+ * @param is_cont           Whether the feature used to split is continuous. 
+ * @param feat_name         The name of the feature used to split.
+ * @param curr_val          The value of the splitting feature for this node.
+ * @param split_value       For continuous feature, it specifies the split value. 
+ *                          Otherwise, it is of no meaning.
+ * @param max_prob          For those elements in this node, the probability that
+ *                          an element belongs to the max_class.
+ * @param max_class         The class ID with the largest number of elements 
+ *                          for those elements in this node.
+ * @param num_of_samples    Total count of samples in this node. 
  *
  * @return It returns the text containing the information of human  
  *         readable information for trees.

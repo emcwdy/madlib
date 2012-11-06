@@ -6,7 +6,7 @@
 @breif common functions written in PL/Python shared by C4.5 and RF
 @namespace dt
 """
-
+"""
 m4_include(`SQLCommon.m4')
 
 m4_ifelse(
@@ -33,7 +33,7 @@ m4_ifelse(
     ), 1,
     `m4_define(`__GREENPLUM_GE_4_2_1__')'
 )
-
+"""
 import datetime
 import math
 import plpy
@@ -339,7 +339,7 @@ def __get_features_of_nodes(
             WHERE s1.nid = s2.id
             GROUP BY nid, dp_ids
         ) t
-        """.format (
+        """.format(
             madlib_schema = madlib_schema,
             num_chosen_fids = int(num_chosen_fids),
             total_num_fids = total_num_fids,
@@ -1450,6 +1450,8 @@ def __train_tree(
         'tmp_dt_hori_table', 
         training_table_name,
         attr_count, 
+        False,
+        'class',
         verbosity)
 
     t = plpy.execute("SELECT count(*) AS count FROM tmp_dt_hori_table")
@@ -2291,6 +2293,8 @@ def __treemodel_classify_internal(
         encoded_table_name,
         metatable_name,
         h2hmv_routine_id,
+        False,
+        'class',
         verbosity)
 
     if verbosity > 0:
@@ -2554,6 +2558,8 @@ def __treemodel_classify_internal_serial(
         encoded_table_name,
         metatable_name,
         h2hmv_routine_id,
+        False,
+        'class',
         verbosity)
 
     if verbosity > 0:
@@ -3311,6 +3317,8 @@ def __encode_and_train(
             id_col_name, 
             feature_name_array, 
             class_col_name,
+            False,
+            'class',
             cont_feature_col_names,
             table_names[0],
             table_names[1], 

@@ -1,0 +1,274 @@
+#encoding=utf-8
+    
+"""
+@file pst.py_in
+
+@brief Functions used to construct suffix tree parallelly for
+       very long string.
+
+@namespace pst
+"""
+
+import plpy
+import datetime
+    
+def create_aux_table(table_name):
+    plpy.execute(
+        """ 
+        drop table if exists {table_name}
+        """.format(
+            table_name = table_name))
+    plpy.execute(
+        """ 
+        create temp table {table_name}
+        (   
+            id      bigint,
+            prefix  text,
+            cur_val text
+        )   
+        """.format(
+            table_name = table_name))
+    
+
+def get_meta_tbl_name(tree_tbl_name):
+    return ('meta_' + str(tree_tbl_name))
+
+    
+def get_enc_tbl_name(tree_tbl_name):
+    return ('enc_' + str(tree_tbl_name))
+
+
+def build(
+        madlib_schema,
+        input_tbl_name,
+        tree_tbl_name,
+        range_val,
+        verbosity):
+    """
+    @brief
+    """
+    
+    # initial params.
+    begin_t = datetime.datetime.now()
+    aux_tables = ['tmp_pst_aux_ping', 'tmp_pst_aux_pong']
+    cur_index = 0
+    cur_table = aux_tables[cur_index]
+    enc_table = get_enc_tbl_name(tree_tbl_name)
+    meta_table = get_meta_tbl_name(tree_tbl_name)
+
+    # create aux ping/pong tables.
+    create_aux_table(aux_tables[0])
+    create_aux_table(aux_tables[1])
+    
+    # create encode table.
+    plpy.execute(
+        """
+        drop table if exists {enc_table}
+        """.format(
+            enc_table = enc_table))
+    plpy.execute(
+        """
+        create table {enc_table}
+        (
+            id          bigint,
+            cur_val     text
+        )
+        """.format(
+            enc_table = enc_table))
+
+    # create meta table.
+    plpy.execute(
+        """
+        drop table if exists {meta_table}
+        """.format(
+            meta_table = meta_table))
+    plpy.execute(
+        """
+        create table {meta_table}
+        (
+            id              int,
+            pst_tbl_name    text,
+            enc_tbl_name    text,
+            node_size       int,
+            str_length      int
+        )
+        """.format(
+            meta_table = meta_table))
+
+    # load range data from input table.
+    t = datetime.datetime.now()
+    plpy.execute(
+        """
+        insert into {enc_table}
+        select id, 
+               {madlib_schema}.__pst_string_agg(val, {range}) over
+               (
+                   order by id
+                   rows between current row 
+                        and {range} following
+               )
+        from {input_tbl_name}
+        """.format(
+            madlib_schema = madlib_schema,
+            enc_table = enc_table,
+            range = range_val,
+            input_tbl_name = input_tbl_name))
+    plpy.info(
+        "load range encode time: " + \
+        str(datetime.datetime.now() - t))
+
+    # create pst tree with the table name specified by user.
+    plpy.execute(
+        """
+        drop table if exists {tree_tbl_name}
+        """.format(
+            tree_tbl_name = tree_tbl_name))
+    plpy.execute(
+        """
+        create table {tree_tbl_name}
+        (
+            id          text,
+            index       bigint,
+            step        int
+        ) distributed by (id);
+        """.format(
+            tree_tbl_name = tree_tbl_name))
+
+    # load data to ping/pong aux table.
+    t = datetime.datetime.now()
+    plpy.execute(
+        """
+        insert into {cur_table}
+        select id, 
+               '' as prefix,
+               cur_val 
+        from {enc_table}
+        """.format(
+            cur_table = cur_table,
+            enc_table = enc_table))
+    plpy.info(
+        "load into cur_table time: " + \
+        str(datetime.datetime.now() - t))
+
+    # Build the suffix tree.
+    build_t = datetime.datetime.now()
+    loop = 0
+    while True:
+        # The iteration exit.
+        t = plpy.execute(
+            """
+            select count(cur_val) as count
+            from {cur_table}
+            """.format(
+                cur_table = cur_table))
+        if t[0]['count'] == 0:
+            break
+        
+        loop += 1
+        plpy.info("Loop {loop}:".format(loop = loop))
+
+        # add tree node.
+        t = datetime.datetime.now()
+        range_i = 1
+        while range_i <= range_val:
+            plpy.execute(
+                """
+                insert into {tree_tbl_name}
+                select prefix||substring(cur_val,1,{range}) as id, 
+                       case when count(substring(cur_val,1,{range})) = 1
+                            then (array_agg(id))[1]
+                            else null 
+                       end as index,
+                       {loop} as step
+                from {cur_table}
+                where length(cur_val) >= {range} 
+                group by prefix,substring(cur_val,1,{range})
+                """.format(
+                    tree_tbl_name = tree_tbl_name,
+                    range = range_i,
+                    cur_table = cur_table,
+                    loop = loop))
+            range_i += 1
+        plpy.info(
+            "insert tree node time: " + \
+            str(datetime.datetime.now() - t))
+
+        cur_index = (cur_index + 1) % 2
+        aux_table = aux_tables[cur_index]
+       
+        # exchange data between ping and pong aux tables to avoid update 
+        # operation. 
+        t = datetime.datetime.now()
+        plpy.execute(
+            """
+            truncate {aux_table}
+            """.format(
+                aux_table = aux_table))
+        plpy.execute(
+            """
+            insert into {aux_table}(id, prefix, cur_val)
+            select u.id,
+                   u.prefix,
+                   e.cur_val
+            from 
+            {enc_table} e,
+            (
+                select unnest(ids) as id, 
+                       prefix
+                from
+                (
+                    select array_agg(id) as ids, 
+                           prefix||cur_val as prefix
+                    from {cur_table}
+                    group by prefix,cur_val
+                    having count(cur_val) > 1
+                ) s
+            ) u
+            where u.id = e.id - {loop}
+            """.format(
+                aux_table = aux_table,
+                cur_table = cur_table,
+                enc_table = enc_table,
+                loop = loop * range_val))
+        plpy.info("ping/pong time: " + str(datetime.datetime.now() - t))
+        
+        # update the current aux table name.
+        cur_table = aux_tables[cur_index]
+
+        # to avoid infinite loop for some code error, this line should be
+        # removed when the program was completed.
+        if loop > 100:
+            break
+    
+    plpy.info("Loop counts: " + str(loop))
+    plpy.info("Build pst time: " + str(datetime.datetime.now() - build_t))
+    plpy.info("Total time: " + str(datetime.datetime.now() - begin_t))
+
+ 
+def verify(
+        madlib_schema,
+        verify_tbl_name,
+        tree_tbl_name,
+        verbosity):
+    """
+    @brief
+    """
+
+    meta_tbl_name = get_meta_tbl_name(tree_tbl_name)
+    
+    # get the encode table name.
+    ds = plpy.execute(
+        """
+        select enc_tbl_name
+        from {meta_tbl_name}
+        where pst_tbl_name = {pst_tbl_name}
+        """.format(
+            meta_tbl_name = meta_tbl_name,
+            pst_tbl_name = tree_tbl_name))
+    enc_tbl_name = ds[0]['enc_tbl_name']
+
+    
+
+
+
+

@@ -1,0 +1,72 @@
+/* ----------------------------------------------------------------------- *//**
+ *
+ * @file pst.sql_in
+ *
+ * @brief The function used to construct a suffix tree parallelly for a
+ *        very long string. 
+ * @date 
+ *
+ *//* ----------------------------------------------------------------------- */
+
+m4_include(`SQLCommon.m4')
+
+/* Own macro definitions */
+m4_ifelse(
+    m4_eval(
+        m4_ifdef(`__GREENPLUM__', 1, 0) &&
+        __DBMS_VERSION_MAJOR__ * 100 + __DBMS_VERSION_MINOR__ < 401
+    ), 1,
+    `m4_define(`__GREENPLUM_PRE_4_1__')'
+)
+m4_ifelse(
+    m4_eval(
+        m4_ifdef(`__POSTGRESQL__', 1, 0) &&
+        __DBMS_VERSION_MAJOR__ < 9
+    ), 1,
+    `m4_define(`__POSTGRESQL_PRE_9_0__')'
+)
+
+m4_ifelse(
+    m4_eval(
+        m4_ifdef(`__GREENPLUM__', 1, 0) &&
+        __DBMS_VERSION_MAJOR__ * 10000 +
+            __DBMS_VERSION_MINOR__ * 100 +
+            __DBMS_VERSION_PATCH__ >= 40201
+    ), 1,
+    `m4_define(`__GREENPLUM_GE_4_2_1__')'
+)
+
+/*
+ * @brief 
+ *
+ * @param
+ *
+ * @return 
+ *
+ */
+CREATE OR REPLACE FUNCTION MADLIB_SCHEMA.__pst_string_agg_sfunc
+    (
+    TEXT,
+    TEXT,
+    INT
+    ) 
+RETURNS TEXT
+AS 'MODULE_PATHNAME', 'pst_string_agg_sfunc'
+LANGUAGE C STRICT IMMUTABLE;
+
+
+DROP AGGREGATE IF EXISTS MADLIB_SCHEMA.__pst_string_agg
+    (
+        TEXT,
+        INT
+    );
+CREATE ORDERED AGGREGATE  MADLIB_SCHEMA.__pst_string_agg
+    (
+        TEXT,
+        INT
+    )
+(
+    SFUNC=MADLIB_SCHEMA.__pst_string_agg_sfunc,
+    STYPE=TEXT
+);
+ 

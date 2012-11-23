@@ -851,6 +851,41 @@ AS 'MODULE_PATHNAME', 'dt_ebp_calc_errors'
 LANGUAGE C STRICT IMMUTABLE;
 
 
+
+CREATE OR REPLACE FUNCTION MADLIB_SCHEMA.__pst_string_agg_sfunc
+    (
+    TEXT,
+    TEXT,
+    INT
+    ) 
+RETURNS TEXT
+AS 'MODULE_PATHNAME', 'pst_string_agg_sfunc'
+LANGUAGE C STRICT IMMUTABLE;
+
+CREATE OR REPLACE FUNCTION MADLIB_SCHEMA.__pst_string_agg_pfunc
+    (    
+        TEXT,
+        TEXT 
+    ) RETURNS TEXT 
+AS 'MODULE_PATHNAME', 'pst_string_agg_pfunc'
+LANGUAGE C STRICT IMMUTABLE;
+
+
+DROP AGGREGATE IF EXISTS MADLIB_SCHEMA.__pst_string_agg
+    (
+        TEXT
+    );
+CREATE ORDERED AGGREGATE  MADLIB_SCHEMA.__pst_string_agg
+    (
+        TEXT,
+        INT
+    )
+(
+    SFUNC=MADLIB_SCHEMA.__pst_string_agg_sfunc,
+    STYPE=TEXT
+);
+ 
+
 /*
  * @brief Prune the trained tree with "Error-based Pruning" algorithm.
  *

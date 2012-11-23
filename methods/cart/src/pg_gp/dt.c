@@ -2314,6 +2314,62 @@ dt_text_format
 }
 PG_FUNCTION_INFO_V1(dt_text_format);
 
+Datum pst_string_agg_pfunc
+(          
+     PG_FUNCTION_ARGS
+)
+{
+    char *state1 = PG_ARGISNULL(0)? NULL : text_to_cstring(PG_GETARG_TEXT_PP(0));
+    char *state2 = PG_ARGISNULL(0)? NULL : text_to_cstring(PG_GETARG_TEXT_PP(1));
+    if (NULL == state1 && NULL == state2)
+        PG_RETURN_NULL();
+    if (NULL == state1 && NULL != state2)
+        return PG_GETARG_DATUM(1);
+    if (NULL != state1 && NULL == state2)
+        return PG_GETARG_DATUM(0);
+    int size1 = strlen(state1);
+    int size2 = strlen(state2);
+
+    char* result = (char*) palloc0((size1 + size2 + 1) * sizeof(char));
+    memcpy(result, state1, size1 * sizeof(char));
+    memcpy(result + size1, state2, size2 * sizeof(char));
+
+    PG_RETURN_TEXT_P(cstring_to_text(result));
+}
+PG_FUNCTION_INFO_V1(pst_string_agg_pfunc);
+
+
+Datum pst_string_agg_sfunc
+(
+    PG_FUNCTION_ARGS
+)
+{
+    char *state = PG_ARGISNULL(0)? NULL : text_to_cstring(PG_GETARG_TEXT_PP(0));
+    char *val = text_to_cstring(PG_GETARG_TEXT_PP(1));
+    int range = PG_GETARG_INT32(2);
+    char *result = NULL;
+    int s_size = 0;
+    int v_size = strlen(val);
+
+    if (state != NULL)
+    {
+        s_size = strlen(state);
+        result = (char *)palloc0((1 + strlen(state)+strlen(val)) * sizeof(char));
+        memcpy(result, state, s_size * sizeof(char));
+        memcpy(state + s_size, val, v_size * sizeof(char));
+    }
+    else
+    {
+        result = (char *)palloc0((strlen(val) + 1) * sizeof(char));
+        memcpy(result, val, v_size * sizeof(char));
+        //state = (char *)palloc0((range + 1) * sizeof(char));
+        //memcpy(state, val, v_size * sizeof(char));
+    }
+
+    PG_RETURN_TEXT_P(cstring_to_text(result));
+}
+PG_FUNCTION_INFO_V1(pst_string_agg_sfunc);
+
 
 /*
  * @brief This function checks whether the specified table exists or not.
@@ -2526,19 +2582,12 @@ Datum dt_array_indexed_agg_sfunc(PG_FUNCTION_ARGS)
 	int32_t         elem_idx;
 	int32_t         iterator_idx;
 	int 		    lbs[1];
-	
-    dt_check_error_value
-        (
-            (fcinfo->context && IsA(fcinfo->context, AggState)),
-            "%s can only be used in aggregations",
-            __FUNCTION__
-        );
 
 	state       = PG_ARGISNULL(0) ? NULL : PG_GETARG_ARRAYTYPE_P(0);
 	elem        = PG_ARGISNULL(1) ? (Datum) 0 : PG_GETARG_DATUM(1);    
 	elem_cnt    = PG_GETARG_INT64(2);
 	elem_idx    = PG_GETARG_INT64(3) - 1;
-
+    
     dt_check_error_value
         (
             elem_cnt > 0,
@@ -2546,12 +2595,13 @@ Datum dt_array_indexed_agg_sfunc(PG_FUNCTION_ARGS)
             elem_cnt
         );
 
-    dt_check_error_value
+    /*dt_check_error_value
         (
             elem_idx >= 0 && elem_idx < elem_cnt,
             "the subscript %d is out of range",
             elem_idx
-        );
+        );*/
+
 
 	get_typlenbyvalalign
         (
@@ -2574,17 +2624,22 @@ Datum dt_array_indexed_agg_sfunc(PG_FUNCTION_ARGS)
 		build_state.dnulls  = NULL;
 		build_state.nelems  = build_state.alen;
 		build_state.element_type = elem_typ;
-
 		for (iterator_idx = 0; iterator_idx < build_state.alen; iterator_idx++)
 		{
-			build_state.dvalues[iterator_idx]   = Float8GetDatum(1);
+			    build_state.dvalues[iterator_idx]   = Float8GetDatum(1);
 		}
 
 		/* put the elem into the target slot */
-		build_state.dvalues[elem_idx << 1]       = elem;
-		build_state.dvalues[(elem_idx << 1) + 1] =  
-			Float8GetDatum(PG_ARGISNULL(1) ? 1 : 0);
-		lbs[0] = 1;
+        /*if (elem_idx > 0)
+        {
+            while(build_state.dvalues[elem_idx << 1] == NULL && elem_idx >= 0) 
+                elem_idx = elem_idx << 1;
+        }*/
+
+        build_state.dvalues[elem_idx << 1]       = elem;
+        build_state.dvalues[(elem_idx << 1) + 1] =  
+	        Float8GetDatum(PG_ARGISNULL(1) ? 1 : 0);
+        lbs[0] = 1;
 
 		state = construct_array(build_state.dvalues, build_state.nelems,
 			build_state.element_type, build_state.typlen, 
@@ -2606,11 +2661,11 @@ Datum dt_array_indexed_agg_sfunc(PG_FUNCTION_ARGS)
             "The dimension of state array should be %d",
             (elem_cnt << 1)
         );
-
-	((float8*)ARR_DATA_PTR(state))[(elem_idx << 1)]     = DatumGetFloat8(elem);
-	((float8*)ARR_DATA_PTR(state))[(elem_idx << 1) + 1] = PG_ARGISNULL(1) ? 1 : 0;
-	
-	PG_RETURN_ARRAYTYPE_P(state);
+    
+    ((float8*)ARR_DATA_PTR(state))[(elem_idx << 1)]     = DatumGetFloat8(elem);
+    ((float8*)ARR_DATA_PTR(state))[(elem_idx << 1) + 1] = PG_ARGISNULL(1) ? 1 : 0;
+    
+    PG_RETURN_ARRAYTYPE_P(state);
 }
 PG_FUNCTION_INFO_V1(dt_array_indexed_agg_sfunc);
 
@@ -2630,13 +2685,6 @@ Datum dt_array_indexed_agg_prefunc(PG_FUNCTION_ARGS)
 	int64       iterator_idx;
 	int32       elem_cnt;
     int64       elem_idx;
-
-    dt_check_error_value
-        (
-            (fcinfo->context && IsA(fcinfo->context, AggState)),
-            "%s can only be used in aggregations",
-            __FUNCTION__
-        );
 
 	arg0 = PG_ARGISNULL(0) ? NULL : PG_GETARG_ARRAYTYPE_P(0);
 	arg1 = PG_ARGISNULL(1) ? NULL : PG_GETARG_ARRAYTYPE_P(1);
@@ -2707,13 +2755,6 @@ Datum dt_array_indexed_agg_ffunc(PG_FUNCTION_ARGS)
 	int32_t     elem_cnt; 
 	int32_t     iterator_idx;
 	int 		lbs[1];
-
-    dt_check_error_value
-        (
-            (fcinfo->context && IsA(fcinfo->context, AggState)),
-            "%s can only be used in aggregations",
-            __FUNCTION__
-        );
 
 	state = PG_ARGISNULL(0) ? NULL : PG_GETARG_ARRAYTYPE_P(0); 
 

@@ -661,10 +661,10 @@ m4_changequote(>>>`<<<, >>>'<<<)
                        (
                            array
                            [
-                              {madlib_schema}.__to_char({attr_col_names})
+                              {attr_col_names}
                            ]
                        ) AS fval,
-                       unnest(array['{is_conts}'::BOOL]::BOOL[]) as is_cont, 
+                       unnest(array[{is_conts}]::BOOL[]) as is_cont, 
                        NULL AS {cls_col_enc_name}
                 FROM {input_tbl_name} t1
             ) t
@@ -675,11 +675,12 @@ m4_changequote(>>>`<<<, >>>'<<<)
                 fval_txt = fval_txt,
                 id_col_name = id_col_name,
                 is_conts_upper = len(is_conts),
-                attr_col_names = "), {madlib_schema}.__to_char(".format(
-                    madlib_schema = madlib_schema).join(
-                        util.__coalesce(name, "null") 
-                        for name in attr_col_names),
-                is_conts = "','".join(str(cont) for cont in is_conts),
+                attr_col_names = ",".join(
+                    (madlib_schema + ".__to_char(" + str(name) + ")") 
+                    for name in attr_col_names),
+                is_conts = ",".join(
+                    ("'" + str(is_cont) + "'::BOOL")    
+                    for is_cont in is_conts),
                 input_tbl_name = input_tbl_name,
                 where_txt = where_txt,
                 cls_col_enc_name = cls_col_enc_name)
@@ -694,11 +695,8 @@ m4_changequote(>>>`<<<, >>>'<<<)
         else:
             class_sql = "code AS " + cls_col_enc_name
             where_sql = """
-                WHERE {madlib_schema}.__to_char(
-                    t1.{cls_col_name}
-                ) = t2.fval
+                t1.{cls_col_name} = t2.fval
                 """.format(
-                    madlib_schema = madlib_schema,
                     cls_col_name = cls_col_name)
             from_sql = "{input_tbl_name} t1, {kv_cls_name} t2".format(
                 input_tbl_name = input_tbl_name,
@@ -718,7 +716,7 @@ m4_changequote(>>>`<<<, >>>'<<<)
                        (
                            array
                            [
-                               {madlib_schema}.__to_char({attr_col_names})
+                               {attr_col_names}
                            ]
                        ) AS fval,
                        unnest
@@ -736,12 +734,12 @@ m4_changequote(>>>`<<<, >>>'<<<)
                 fval_txt = fval_txt,
                 id_col_name = id_col_name,
                 is_conts_upper = len(is_conts),
-                attr_col_names = "), {madlib_schema}.__to_char(".format(
-                    madlib_schema = madlib_schema).join(
-                        name for name in attr_col_names),
-                    is_conts = ",".join(
-                        ("'" + str(is_cont) + "'::BOOL") 
-                        for is_cont in is_conts),
+                attr_col_names = ",".join(
+                    (madlib_schema + ".__to_char(" + str(name) + ")")
+                    for name in attr_col_names),
+                is_conts = ",".join(
+                    ("'" + str(is_cont) + "'::BOOL") 
+                    for is_cont in is_conts),
                 class_sql = class_sql,
                 from_sql = from_sql,
                 where_sql = where_sql,
@@ -1120,7 +1118,7 @@ m4_changequote(>>>`<<<, >>>'<<<)
         curstmt = """
             CREATE TABLE {kv_cls_name} AS
             SELECT 0 as fid,
-                   {madlib_schema}.__to_char({cls_col_name}) AS fval,
+                   {cls_col_name} AS fval,
                    rank() OVER (ORDER BY {cls_col_name}) AS code
             FROM
             (
@@ -1130,7 +1128,6 @@ m4_changequote(>>>`<<<, >>>'<<<)
             ) t
             m4_ifdef(`__GREENPLUM__', `DISTRIBUTED BY (fval)')
             """.format(
-                madlib_schema = madlib_schema,
                 kv_cls_name = kv_cls_name,
                 cls_col_name = cls_col_name,
                 input_tbl_name = input_tbl_name)

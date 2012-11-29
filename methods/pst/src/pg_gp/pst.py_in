@@ -86,14 +86,42 @@ def build(
         """
         create table {meta_table}
         (
-            id              int,
+            id              serial,
             pst_tbl_name    text,
             enc_tbl_name    text,
-            node_size       int,
+            input_tbl_name  text,
+            range_val       int,
+            node_count      int,
             str_length      int
         )
         """.format(
             meta_table = meta_table))
+    plpy.execute(
+        """
+        insert into {meta_table}
+        (
+            pst_tbl_name, 
+            enc_tbl_name, 
+            input_tbl_name,
+            range_val,
+            node_count,
+            str_length
+        )
+        values
+        (
+            '{pst_tbl_name}',
+            '{enc_tbl_name}',
+            '{input_tbl_name}',
+            {range_val},
+            0,
+            0
+        )
+        """.format(
+            meta_table = meta_table,
+            pst_tbl_name = tree_tbl_name,
+            enc_tbl_name = enc_table,
+            input_tbl_name = input_tbl_name,
+            range_val = range_val))
 
     # load range data from input table.
     t = datetime.datetime.now()
@@ -129,7 +157,7 @@ def build(
         (
             id          text,
             index       bigint,
-            step        int
+            depth        int
         ) distributed by (id);
         """.format(
             tree_tbl_name = tree_tbl_name))
@@ -153,6 +181,7 @@ def build(
     # Build the suffix tree.
     build_t = datetime.datetime.now()
     loop = 0
+    depth = 1
     while True:
         # The iteration exit.
         t = plpy.execute(
@@ -174,21 +203,47 @@ def build(
             plpy.execute(
                 """
                 insert into {tree_tbl_name}
-                select prefix||substring(cur_val,1,{range}) as id, 
-                       case when count(substring(cur_val,1,{range})) = 1
-                            then (array_agg(id))[1]
-                            else null 
-                       end as index,
-                       {loop} as step
-                from {cur_table}
-                where length(cur_val) >= {range} 
-                group by prefix,substring(cur_val,1,{range})
+                select prefix||substr as id,
+                       (array_agg(id))[1] as index,
+                       {depth} as depth
+                from
+                (
+                    select id,
+                           prefix,
+                           substring(cur_val,1,{range}) as substr
+                    from {cur_table}
+                    where length(cur_val) >= {range}
+                ) s
+                group by prefix, substr
+                having count(substr) = 1
                 """.format(
                     tree_tbl_name = tree_tbl_name,
                     range = range_i,
                     cur_table = cur_table,
-                    loop = loop))
+                    depth = depth))
+            
+            # if we can tell the difference of strings, then stop that 
+            # string matching.
+            t_stop = datetime.datetime.now()
+            plpy.execute(
+                """
+                delete from {cur_table} c
+                where exists
+                (
+                    select 1
+                    from {tree_tbl_name} t
+                    where depth = {depth} and
+                          t.index = c.id
+                ) 
+                """.format(
+                    cur_table = cur_table,
+                    tree_tbl_name = tree_tbl_name,
+                    depth = depth))
+            plpy.info(
+                "stop time: " + str(datetime.datetime.now() - t_stop))
             range_i += 1
+            depth += 1
+        
         plpy.info(
             "insert tree node time: " + \
             str(datetime.datetime.now() - t))
@@ -249,26 +304,224 @@ def verify(
         madlib_schema,
         verify_tbl_name,
         tree_tbl_name,
+        result_tbl_name,
         verbosity):
     """
     @brief
-    """
 
+    @param  madlib_schema       The name of the madlib schema.
+    @param  verify_tbl_name     The name of the table which contains the strings 
+                                that are going to be matched.
+    @param  tree_tbl_name       The trained suffix tree table.
+    @param  result_tbl_name     The table that is used to store the matching result.
+    """
+    # param initial.
     meta_tbl_name = get_meta_tbl_name(tree_tbl_name)
+    enc_tbl_name = get_enc_tbl_name(tree_tbl_name)
+    aux_table = 'tmp_pst_verify_table'
     
-    # get the encode table name.
+    # get input_tbl_name and range_value used in suffix tree construction.
     ds = plpy.execute(
         """
-        select enc_tbl_name
+        select input_tbl_name, range_val
         from {meta_tbl_name}
-        where pst_tbl_name = {pst_tbl_name}
+        limit 1
         """.format(
-            meta_tbl_name = meta_tbl_name,
-            pst_tbl_name = tree_tbl_name))
-    enc_tbl_name = ds[0]['enc_tbl_name']
-
+            meta_tbl_name = meta_tbl_name))
+    input_tbl_name = ds[0]['input_tbl_name']
+    range_val = ds[0]['range_val']
     
+    # create the result table.
+    plpy.execute(
+        """
+        drop table if exists {result_tbl_name}
+        """.format(
+            result_tbl_name = result_tbl_name))
+    plpy.execute(
+        """
+        create table {result_tbl_name}
+        (
+            id          int,
+            str_val     text,
+            begin_index bigint[]
+        )
+        distributed by (id)
+        """.format(
+            result_tbl_name = result_tbl_name))
+    
+    # create aux table.
+    plpy.execute(
+        """
+        drop table if exists {aux_table}
+        """.format(
+            aux_table = aux_table))
+    plpy.execute(
+        """
+        create table {aux_table}
+        (
+            id              int,
+            str_val         text,
+            begin_index     bigint[],
+            match_val       text[]
+        )
+        distributed by (id)
+        """.format(
+            aux_table = aux_table))
+    
+    # begin matching.
+    plpy.execute(
+        """
+        insert into {aux_table}
+        select v.id as id, 
+               v.str_val as str_val, 
+               array_agg(t.index) as begin_index,
+               --t.index as begin_index,
+               array_agg(t.id) as match_val
+        from {verify_tbl_name} v
+        join {tree_tbl_name} t
+        on t.index <> -1 and 
+           substring(t.id, 1, length(v.str_val)) = v.str_val
+        group by v.id, v.str_val
+        """.format(
+            aux_table = aux_table,
+            tree_tbl_name = tree_tbl_name,
+            verify_tbl_name = verify_tbl_name))
+    
+    # process the string which reachs the leaves.
+    fp_tables = ['tmp_pst_fp_ping', 'tmp_pst_fp_pong']
+    cur_fp_index = 0
+    cur_fp_table = fp_tables[cur_fp_index]
+    
+    # create aux ping/pong table for further process.
+    plpy.execute(
+        """
+        drop table if exists {fp_table}
+        """.format(
+            fp_table = fp_tables[0]))
+    plpy.execute(
+        """
+        create table {fp_table}
+        (
+            id              int,
+            str_val         text,
+            index           bigint,
+            match_val       text,
+            matched_length  int
+        )
+        """.format(
+            fp_table = fp_tables[0]))
+    plpy.execute(
+        """
+        drop table if exists {fp_table}
+        """.format(
+            fp_table = fp_tables[1]))
+    plpy.execute(
+        """
+        create table {fp_table}
+        (
+           id              int,
+           str_val         text,
+           index           bigint,
+           match_val       text,
+           matched_length  int
+        )
+        """.format(
+            fp_table = fp_tables[1]))
+    
+    # load the string which need further matching into the aux table.
+    plpy.execute(
+        """
+        insert into {cur_fp_table}
+        select v.id,
+               v.str_val,
+               t.index as index,
+               e.cur_val as match_val,
+               length(t.id) as matched_length
+        from {verify_tbl_name} v, {tree_tbl_name} t, {enc_tbl_name} e
+        where t.index <> -1 and
+              t.id = substring(v.str_val, 1, length(t.id)) and
+              (e.id - length(t.id)) = t.index
+        """.format(
+            cur_fp_table = cur_fp_table,
+            verify_tbl_name = verify_tbl_name,
+            tree_tbl_name = tree_tbl_name,
+            enc_tbl_name = enc_tbl_name))
 
+    # start further matching for the strings which reach the leaves.
+    while True:
+        # iteration exit.
+        ds = plpy.execute(
+            """
+            select count(*) as count
+            from {cur_fp_table}
+            """.format(
+                cur_fp_table = cur_fp_table))
+        if ds[0]['count'] == 0:
+            break
 
+        # match next range string. 
+        plpy.execute(
+            """
+            insert into {aux_table}
+            select f.id,
+                   f.str_val,
+                   array[f.index],
+                   array[f.match_val]
+            from {cur_fp_table} f
+            where substring(f.str_val, f.matched_length + 1) = 
+                  substring(f.match_val, 1, length(f.str_val) - f.matched_length)
+            """.format(
+                aux_table = aux_table,
+                enc_tbl_name = enc_tbl_name,
+                cur_fp_table = cur_fp_table))
+        
+        cur_fp_index = (cur_fp_index + 1) % 2
+        fp_aux_table = fp_tables[cur_fp_index]
+        
+        # exchange the data between ping/pong table.
+        plpy.execute(
+            """
+            truncate {fp_aux_table}
+            """.format(
+                fp_aux_table = fp_aux_table))
+        plpy.execute(
+            """
+            insert into {fp_aux_table}
+            select f.id,
+                   f.str_val,
+                   f.index,
+                   e.cur_val as match_val,
+                   (f.matched_length + {range_val}) as matched_length
+            from {cur_fp_table} f, {enc_tbl_name} e
+            where (e.id - f.matched_length - {range_val}) = f.index and
+                  (f.matched_length + {range_val}) < length(f.str_val) and
+                  substring
+                  (
+                      f.str_val, 
+                      f.matched_length + 1, 
+                      {range_val}
+                  ) = f.match_val
+            """.format(
+                fp_aux_table = fp_aux_table,
+                cur_fp_table = cur_fp_table,
+                enc_tbl_name = enc_tbl_name,
+                range_val = range_val))
+        
+        # change the current further process table.
+        cur_fp_table = fp_tables[cur_fp_index]
 
+    # load the matched string into result table.
+    plpy.execute(
+        """
+        insert into {result_tbl_name}
+        select v.id,
+               v.str_val,
+               f.begin_index
+        from {verify_tbl_name} v
+        left join {aux_table} f
+        on v.id = f.id
+        """.format(
+            result_tbl_name = result_tbl_name,
+            verify_tbl_name = verify_tbl_name,
+            aux_table = aux_table))
 

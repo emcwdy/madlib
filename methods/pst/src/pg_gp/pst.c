@@ -62,13 +62,14 @@ Datum pst_string_agg_sfunc
         result = (char *)palloc0((1 + strlen(state)+strlen(val)) * sizeof(char));
         memcpy(result, state, s_size * sizeof(char));
         memcpy(result + s_size, val, v_size * sizeof(char));
+        //memcpy(state + s_size + 1, val, v_size + 1);
     }
     else
     {
-        result = (char *)palloc0((strlen(val) + 1) * sizeof(char));
-        memcpy(result, val, v_size * sizeof(char));
+        result = (char *)palloc0((range + 1) * sizeof(char));
+        //memcpy(state, val, v_size);
         //state = (char *)palloc0((range + 1) * sizeof(char));
-        //memcpy(state, val, v_size * sizeof(char));
+        memcpy(result, val, v_size * sizeof(char));
     }
     
     PG_RETURN_TEXT_P(cstring_to_text(result));

@@ -81,7 +81,7 @@ CREATE OR REPLACE FUNCTION MADLIB_SCHEMA.pst_build
 RETURNS VOID
 AS $$
     PythonFunctionBodyOnly(`pst', `pst')
-    return pst.build(MADlibSchema, input_tbl_name, tree_tbl_name, range_val, verbosity)
+    pst.build(MADlibSchema, input_tbl_name, tree_tbl_name, range_val, verbosity)
 $$ LANGUAGE PLPYTHONU;
 
 
@@ -89,10 +89,11 @@ CREATE OR REPLACE FUNCTION MADLIB_SCHEMA.pst_verify
 (
     verify_tbl_name TEXT,
     tree_tbl_name   TEXT,
+    result_tbl_name TEXT,
     verbosity       INT
 )
 RETURNS VOID
 AS $$
     PythonFunctionBodyOnly(`pst', `pst')
-
+    pst.verify(MADlibSchema, verify_tbl_name, tree_tbl_name, result_tbl_name, verbosity)
 $$ LANGUAGE PLPYTHONU;

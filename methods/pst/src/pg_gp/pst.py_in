@@ -34,31 +34,20 @@ def get_meta_tbl_name(tree_tbl_name):
     return ('meta_' + str(tree_tbl_name))
 
     
-def get_enc_tbl_name(tree_tbl_name):
-    return ('enc_' + str(tree_tbl_name))
+def get_enc_tbl_name(input_tbl_name):
+    return ('enc_' + str(input_tbl_name))
 
 
-def build(
+def prepare(
         madlib_schema,
         input_tbl_name,
-        tree_tbl_name,
         range_val,
         verbosity):
     """
     @brief
     """
-    
-    # initial params.
-    begin_t = datetime.datetime.now()
-    aux_tables = ['tmp_pst_aux_ping', 'tmp_pst_aux_pong']
-    cur_index = 0
-    cur_table = aux_tables[cur_index]
-    enc_table = get_enc_tbl_name(tree_tbl_name)
-    meta_table = get_meta_tbl_name(tree_tbl_name)
 
-    # create aux ping/pong tables.
-    create_aux_table(aux_tables[0])
-    create_aux_table(aux_tables[1])
+    enc_table = get_enc_tbl_name(input_tbl_name)
     
     # create encode table.
     plpy.execute(
@@ -76,6 +65,54 @@ def build(
         """.format(
             enc_table = enc_table))
 
+    # load range data from input table.
+    t = datetime.datetime.now()
+    plpy.execute(
+        """
+        insert into {enc_table}
+        select id,
+               {madlib_schema}.__pst_string_agg(val, {range}) over
+               (
+                   order by id
+                   rows between current row
+                        and {range} following
+               )
+        from {input_tbl_name}
+        """.format(
+            madlib_schema = madlib_schema,
+            enc_table = enc_table,
+            range = range_val,
+            input_tbl_name = input_tbl_name))
+    plpy.info(
+        "load range encode time: " + \
+        str(datetime.datetime.now() - t))
+    
+    return enc_table
+
+
+def build(
+        madlib_schema,
+        input_tbl_name,
+        tree_tbl_name,
+        enc_tbl_name,
+        range_val,
+        verbosity):
+    """
+    @brief
+    """
+    
+    # initial params.
+    begin_t = datetime.datetime.now()
+    aux_tables = ['tmp_pst_aux_ping', 'tmp_pst_aux_pong']
+    cur_index = 0
+    cur_table = aux_tables[cur_index]
+    enc_table = get_enc_tbl_name(input_tbl_name)
+    meta_table = get_meta_tbl_name(tree_tbl_name)
+
+    # create aux ping/pong tables.
+    create_aux_table(aux_tables[0])
+    create_aux_table(aux_tables[1])
+    
     # create meta table.
     plpy.execute(
         """
@@ -122,29 +159,21 @@ def build(
             enc_tbl_name = enc_table,
             input_tbl_name = input_tbl_name,
             range_val = range_val))
-
-    # load range data from input table.
-    t = datetime.datetime.now()
-    plpy.execute(
-        """
-        insert into {enc_table}
-        select id, 
-               {madlib_schema}.__pst_string_agg(val, {range}) over
-               (
-                   order by id
-                   rows between current row 
-                        and {range} following
-               )
-        from {input_tbl_name}
-        """.format(
-            madlib_schema = madlib_schema,
-            enc_table = enc_table,
-            range = range_val,
-            input_tbl_name = input_tbl_name))
-    plpy.info(
-        "load range encode time: " + \
-        str(datetime.datetime.now() - t))
-
+    
+    # if user does not specify the encode table, 
+    # we should encode the input table. 
+    if enc_tbl_name is None:
+        prepare(
+            madlib_schema, 
+            input_tbl_name,
+            range_val,
+            verbosity)
+    else:
+        if enc_tbl_name != enc_table:
+            plpy.error(
+                "{enc_tbl_name} does not match.".format(
+                    enc_tbl_name = enc_tbl_name))
+     
     # create pst tree with the table name specified by user.
     plpy.execute(
         """
@@ -200,6 +229,7 @@ def build(
         t = datetime.datetime.now()
         range_i = 1
         while range_i <= range_val:
+            t_match = datetime.datetime.now()
             plpy.execute(
                 """
                 insert into {tree_tbl_name}
@@ -221,26 +251,24 @@ def build(
                     range = range_i,
                     cur_table = cur_table,
                     depth = depth))
-            
+            plpy.info(
+                "match string time: " + str(datetime.datetime.now() - t_match))
+
             # if we can tell the difference of strings, then stop that 
             # string matching.
-            t_stop = datetime.datetime.now()
+            t_reduce = datetime.datetime.now()
             plpy.execute(
                 """
                 delete from {cur_table} c
-                where exists
-                (
-                    select 1
-                    from {tree_tbl_name} t
-                    where depth = {depth} and
-                          t.index = c.id
-                ) 
+                using {tree_tbl_name} t
+                where depth = {depth} and
+                      c.id = t.index
                 """.format(
                     cur_table = cur_table,
                     tree_tbl_name = tree_tbl_name,
                     depth = depth))
             plpy.info(
-                "stop time: " + str(datetime.datetime.now() - t_stop))
+                "reduce matching time: " + str(datetime.datetime.now() - t_reduce))
             range_i += 1
             depth += 1
         
@@ -250,7 +278,7 @@ def build(
 
         cur_index = (cur_index + 1) % 2
         aux_table = aux_tables[cur_index]
-       
+        
         # exchange data between ping and pong aux tables to avoid update 
         # operation. 
         t = datetime.datetime.now()
@@ -262,24 +290,11 @@ def build(
         plpy.execute(
             """
             insert into {aux_table}(id, prefix, cur_val)
-            select u.id,
-                   u.prefix,
+            select c.id,
+                   c.prefix||c.cur_val as prefix,
                    e.cur_val
-            from 
-            {enc_table} e,
-            (
-                select unnest(ids) as id, 
-                       prefix
-                from
-                (
-                    select array_agg(id) as ids, 
-                           prefix||cur_val as prefix
-                    from {cur_table}
-                    group by prefix,cur_val
-                    having count(cur_val) > 1
-                ) s
-            ) u
-            where u.id = e.id - {loop}
+            from {enc_table} e, {cur_table} c
+            where c.id = e.id - {loop}
             """.format(
                 aux_table = aux_table,
                 cur_table = cur_table,

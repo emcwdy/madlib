@@ -52,7 +52,7 @@ CREATE OR REPLACE FUNCTION MADLIB_SCHEMA.__pst_string_agg_sfunc
     ) 
 RETURNS TEXT
 AS 'MODULE_PATHNAME', 'pst_string_agg_sfunc'
-LANGUAGE C STRICT IMMUTABLE;
+LANGUAGE C IMMUTABLE;
 
 
 DROP AGGREGATE IF EXISTS MADLIB_SCHEMA.__pst_string_agg
@@ -71,17 +71,31 @@ CREATE ORDERED AGGREGATE  MADLIB_SCHEMA.__pst_string_agg
 );
 
 
+CREATE OR REPLACE FUNCTION MADLIB_SCHEMA.pst_prepare
+(
+    input_tbl_name  TEXT,
+    range_val       INT,
+    verbosity       INT
+)
+RETURNS TEXT
+AS $$
+    PythonFunctionBodyOnly(`pst', `pst')
+    return pst.prepare(MADlibSchema, input_tbl_name, range_val, verbosity)
+$$ LANGUAGE PLPYTHONU;
+
+
 CREATE OR REPLACE FUNCTION MADLIB_SCHEMA.pst_build
 (
     input_tbl_name  TEXT,
     tree_tbl_name   TEXT,
+    enc_tbl_name    TEXT,
     range_val       INT,
     verbosity       INT
 )
 RETURNS VOID
 AS $$
     PythonFunctionBodyOnly(`pst', `pst')
-    pst.build(MADlibSchema, input_tbl_name, tree_tbl_name, range_val, verbosity)
+    pst.build(MADlibSchema, input_tbl_name, tree_tbl_name, enc_tbl_name, range_val, verbosity)
 $$ LANGUAGE PLPYTHONU;
 
 

@@ -1007,7 +1007,7 @@ LANGUAGE C STRICT VOLATILE;
 CREATE OR REPLACE FUNCTION MADLIB_SCHEMA.__sample_with_replacement
     ( 
     num_of_tree     INT,
-    size_per_tree   INT, 
+    size_per_tree   BIGINT, 
     src_table       TEXT,
     target_table    TEXT
     ) 
